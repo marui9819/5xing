@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>霓虹俄罗斯方块</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="background-glow"></div>
+  <main class="game-shell">
+    <header class="game-header">
+      <h1>霓虹俄罗斯方块</h1>
+      <p>感受未来感十足的下落节奏，挑战你的反应极限！</p>
+    </header>
+
+    <section class="game-panel">
+      <div class="board-wrapper">
+        <canvas id="board" width="320" height="640" aria-label="游戏主界面" role="img"></canvas>
+        <div class="overlay" id="overlay">
+          <button id="startBtn" class="primary">开始游戏</button>
+          <button id="resumeBtn" class="secondary">继续</button>
+        </div>
+      </div>
+
+      <aside class="info-panel">
+        <div class="control-card">
+          <h2>游戏设置</h2>
+          <label for="difficulty">难度：</label>
+          <select id="difficulty">
+            <option value="easy">轻松</option>
+            <option value="normal" selected>标准</option>
+            <option value="hard">狂热</option>
+            <option value="zen">禅境（无限时间）</option>
+          </select>
+          <button id="pauseBtn" class="secondary">暂停</button>
+        </div>
+
+        <div class="control-card">
+          <h2>数据面板</h2>
+          <p>得分：<span id="score">0</span></p>
+          <p>等级：<span id="level">1</span></p>
+          <p>消除行数：<span id="lines">0</span></p>
+        </div>
+
+        <div class="control-card next-piece">
+          <h2>下一块</h2>
+          <canvas id="next" width="120" height="120" role="img" aria-label="下一块提示"></canvas>
+        </div>
+
+        <div class="control-card">
+          <h2>操作方式</h2>
+          <ul>
+            <li>⬅️ ➡️：左右移动</li>
+            <li>⬆️：旋转</li>
+            <li>⬇️：加速下落</li>
+            <li>空格：瞬间落地</li>
+          </ul>
+        </div>
+      </aside>
+    </section>
+
+    <footer>
+      <p>保持节奏，紧跟节拍！</p>
+    </footer>
+  </main>
+
+  <script src="script.js" type="module"></script>
+</body>
+</html>
