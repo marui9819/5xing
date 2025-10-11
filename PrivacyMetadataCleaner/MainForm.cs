@@ -436,22 +436,38 @@ namespace PrivacyMetadataCleaner
                     ClearPdfInfo(info.GetSubject(), value => info.SetSubject(value), "主题", clearedFields);
                     ClearPdfInfo(info.GetTitle(), value => info.SetTitle(value), "标题", clearedFields);
 
-                    var moreInfo = info.GetMoreInfo();
-                    if (moreInfo != null && moreInfo.Count > 0)
+                    var infoDictionary = info.GetPdfObject();
+                    if (infoDictionary != null)
                     {
-                        foreach (var key in moreInfo.Keys.ToList())
+                        var standardKeys = new HashSet<PdfName>
                         {
-                            if (!string.IsNullOrEmpty(moreInfo[key]))
+                            PdfName.Author,
+                            PdfName.Creator,
+                            PdfName.Producer,
+                            PdfName.Keywords,
+                            PdfName.Subject,
+                            PdfName.Title
+                        };
+
+                        var keysToRemove = infoDictionary.KeySet()
+                            .Where(key => !standardKeys.Contains(key))
+                            .ToList();
+
+                        foreach (var key in keysToRemove)
+                        {
+                            var value = infoDictionary.GetAsString(key);
+                            if (value != null && !string.IsNullOrEmpty(value.ToString()))
                             {
-                                info.SetMoreInfo(key, string.Empty);
-                                clearedFields.Add($"{key}");
+                                infoDictionary.Remove(key);
+                                clearedFields.Add(key.GetValue() ?? key.ToString());
                             }
                         }
                     }
 
-                    if (pdfDoc.GetXmpMetadata() != null)
+                    var catalogObject = pdfDoc.GetCatalog().GetPdfObject();
+                    if (catalogObject != null && catalogObject.ContainsKey(PdfName.Metadata))
                     {
-                        pdfDoc.SetXmpMetadata(new byte[0]);
+                        catalogObject.Remove(PdfName.Metadata);
                         clearedFields.Add("XMP 元数据");
                     }
                 }
@@ -529,7 +545,6 @@ namespace PrivacyMetadataCleaner
                     if (iccProfile != null)
                     {
                         image.SetProfile(iccProfile);
-                        iccProfile.Dispose();
                     }
 
                     if (hasOtherProfiles || hadComment || changed)
