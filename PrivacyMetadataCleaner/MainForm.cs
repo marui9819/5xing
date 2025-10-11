@@ -4,11 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using DocumentFormat.OpenXml.Drawing;
-using DocumentFormat.OpenXml.Drawing.Wordprocessing;
 using DocumentFormat.OpenXml.ExtendedProperties;
 using DocumentFormat.OpenXml.Packaging;
-using DocumentFormat.OpenXml.Wordprocessing;
 using iText.IO.Image;
 using iText.Kernel.Pdf;
 using iText.Layout;
@@ -18,6 +15,13 @@ using PdfLayoutDocument = iText.Layout.Document;
 using PdfParagraph = iText.Layout.Element.Paragraph;
 using PdfImageElement = iText.Layout.Element.Image;
 using WordParagraph = DocumentFormat.OpenXml.Wordprocessing.Paragraph;
+using WordRun = DocumentFormat.OpenXml.Wordprocessing.Run;
+using WordText = DocumentFormat.OpenXml.Wordprocessing.Text;
+using WordBreak = DocumentFormat.OpenXml.Wordprocessing.Break;
+using WordDrawingElement = DocumentFormat.OpenXml.Wordprocessing.Drawing;
+using WordTable = DocumentFormat.OpenXml.Wordprocessing.Table;
+using DrawingBlip = DocumentFormat.OpenXml.Drawing.Blip;
+using IOPath = System.IO.Path;
 
 namespace PrivacyMetadataCleaner
 {
@@ -103,7 +107,7 @@ namespace PrivacyMetadataCleaner
             lvFiles.Size = new System.Drawing.Size(776, 280);
             lvFiles.TabIndex = 4;
             lvFiles.UseCompatibleStateImageBehavior = false;
-            lvFiles.View = View.Details;
+            lvFiles.View = System.Windows.Forms.View.Details;
             lvFiles.ItemCheck += lvFiles_ItemCheck;
             //
             // columnHeaderFile
@@ -222,7 +226,7 @@ namespace PrivacyMetadataCleaner
                 .Cast<ListViewItem>()
                 .Where(item => item.Checked)
                 .Select(item => item.Tag as string)
-                .Where(path => !string.IsNullOrEmpty(path) && string.Equals(Path.GetExtension(path), ".docx", StringComparison.OrdinalIgnoreCase))
+                .Where(path => !string.IsNullOrEmpty(path) && string.Equals(IOPath.GetExtension(path), ".docx", StringComparison.OrdinalIgnoreCase))
                 .Select(path => path!)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
@@ -299,7 +303,9 @@ namespace PrivacyMetadataCleaner
             var filesToProcess = lvFiles.Items
                 .Cast<ListViewItem>()
                 .Where(item => item.Checked)
-                .Select(item => (string)item.Tag)
+                .Select(item => item.Tag as string)
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Select(path => path!)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
@@ -418,7 +424,7 @@ namespace PrivacyMetadataCleaner
 
         private bool IsSupportedExtension(string path)
         {
-            var extension = Path.GetExtension(path);
+            var extension = IOPath.GetExtension(path);
             if (string.IsNullOrEmpty(extension))
             {
                 return false;
@@ -431,7 +437,7 @@ namespace PrivacyMetadataCleaner
         {
             try
             {
-                var extension = Path.GetExtension(filePath)?.ToLowerInvariant();
+                var extension = IOPath.GetExtension(filePath)?.ToLowerInvariant();
                 return extension switch
                 {
                     ".docx" => CleanDocx(filePath),
@@ -448,7 +454,7 @@ namespace PrivacyMetadataCleaner
 
         private CompressionResult CompressDocxDocument(string sourcePath, CompressionQuality quality, CompressionOutputFormat format)
         {
-            var tempDocxPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.docx");
+            var tempDocxPath = IOPath.Combine(IOPath.GetTempPath(), $"{Guid.NewGuid():N}.docx");
 
             try
             {
@@ -519,11 +525,7 @@ namespace PrivacyMetadataCleaner
 
                 if (image.Format == MagickFormat.Png)
                 {
-                    image.SetDefine(MagickFormat.Png, "compression-level", pngCompressionLevel);
-                }
-                else if (image.Format == MagickFormat.Jpeg || image.Format == MagickFormat.Jpg)
-                {
-                    image.Interlace = Interlace.No;
+                    image.Settings.SetDefine(MagickFormat.Png, "compression-level", pngCompressionLevel.ToString());
                 }
 
                 using var compressedBuffer = new MemoryStream();
@@ -562,7 +564,7 @@ namespace PrivacyMetadataCleaner
                     case WordParagraph paragraph:
                         AddParagraphToPdf(paragraph, mainPart, pdf);
                         break;
-                    case Table table:
+                    case WordTable table:
                         var tableText = table.InnerText;
                         if (!string.IsNullOrWhiteSpace(tableText))
                         {
@@ -578,9 +580,9 @@ namespace PrivacyMetadataCleaner
             var pdfParagraph = new PdfParagraph();
             var hasContent = false;
 
-            foreach (var run in paragraph.Elements<Run>())
+            foreach (var run in paragraph.Elements<WordRun>())
             {
-                foreach (var text in run.Elements<Text>())
+                foreach (var text in run.Elements<WordText>())
                 {
                     if (!string.IsNullOrEmpty(text.Text))
                     {
@@ -589,13 +591,13 @@ namespace PrivacyMetadataCleaner
                     }
                 }
 
-                foreach (var br in run.Elements<Break>())
+                foreach (var br in run.Elements<WordBreak>())
                 {
                     pdfParagraph.Add(Environment.NewLine);
                     hasContent = true;
                 }
 
-                foreach (var drawing in run.Elements<Drawing>())
+                foreach (var drawing in run.Elements<WordDrawingElement>())
                 {
                     var imageElement = CreatePdfImageFromDrawing(drawing, mainPart);
                     if (imageElement != null)
@@ -614,9 +616,9 @@ namespace PrivacyMetadataCleaner
             pdf.Add(pdfParagraph);
         }
 
-        private PdfImageElement? CreatePdfImageFromDrawing(Drawing drawing, MainDocumentPart mainPart)
+        private PdfImageElement? CreatePdfImageFromDrawing(WordDrawingElement drawing, MainDocumentPart mainPart)
         {
-            var blip = drawing.Descendants<DocumentFormat.OpenXml.Drawing.Blip>().FirstOrDefault();
+            var blip = drawing.Descendants<DrawingBlip>().FirstOrDefault();
             if (blip?.Embed == null)
             {
                 return null;
@@ -656,10 +658,10 @@ namespace PrivacyMetadataCleaner
 
         private static string BuildOutputPath(string sourcePath, string newExtension)
         {
-            var directory = Path.GetDirectoryName(sourcePath) ?? string.Empty;
-            var fileName = Path.GetFileNameWithoutExtension(sourcePath);
+            var directory = IOPath.GetDirectoryName(sourcePath) ?? string.Empty;
+            var fileName = IOPath.GetFileNameWithoutExtension(sourcePath);
             var extension = newExtension.StartsWith('.') ? newExtension : $".{newExtension}";
-            var candidate = Path.Combine(directory, $"{fileName}_s{extension}");
+            var candidate = IOPath.Combine(directory, $"{fileName}_s{extension}");
 
             if (!File.Exists(candidate))
             {
@@ -669,7 +671,7 @@ namespace PrivacyMetadataCleaner
             var index = 1;
             while (true)
             {
-                var nextCandidate = Path.Combine(directory, $"{fileName}_s({index}){extension}");
+                var nextCandidate = IOPath.Combine(directory, $"{fileName}_s({index}){extension}");
                 if (!File.Exists(nextCandidate))
                 {
                     return nextCandidate;
@@ -794,7 +796,7 @@ namespace PrivacyMetadataCleaner
         private FileProcessResult CleanPdf(string filePath)
         {
             var clearedFields = new List<string>();
-            var tempFile = Path.GetTempFileName();
+            var tempFile = IOPath.GetTempFileName();
 
             try
             {
@@ -865,7 +867,7 @@ namespace PrivacyMetadataCleaner
         private FileProcessResult CleanImage(string filePath)
         {
             var clearedFields = new List<string>();
-            var tempFile = Path.GetTempFileName();
+            var tempFile = IOPath.GetTempFileName();
 
             try
             {
@@ -1018,13 +1020,13 @@ namespace PrivacyMetadataCleaner
             switch (result.Status)
             {
                 case FileProcessStatus.Success:
-                    AppendLog($"成功清理 {Path.GetFileName(result.FilePath)}: {string.Join(", ", result.ClearedMetadata)}");
+                    AppendLog($"成功清理 {IOPath.GetFileName(result.FilePath)}: {string.Join(", ", result.ClearedMetadata)}");
                     break;
                 case FileProcessStatus.Skipped:
-                    AppendLog($"跳过 {Path.GetFileName(result.FilePath)}: {result.ErrorMessage}");
+                    AppendLog($"跳过 {IOPath.GetFileName(result.FilePath)}: {result.ErrorMessage}");
                     break;
                 case FileProcessStatus.Failed:
-                    AppendLog($"失败 {Path.GetFileName(result.FilePath)}: {result.ErrorMessage}");
+                    AppendLog($"失败 {IOPath.GetFileName(result.FilePath)}: {result.ErrorMessage}");
                     break;
             }
         }
