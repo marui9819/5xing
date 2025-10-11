@@ -53,6 +53,7 @@ namespace PrivacyMetadataCleaner
             btnAddFolder = new Button();
             btnStart = new Button();
             btnCompress = new Button();
+            btnClearList = new Button();
             lvFiles = new ListView();
             columnHeaderFile = new ColumnHeader();
             columnHeaderStatus = new ColumnHeader();
@@ -82,7 +83,7 @@ namespace PrivacyMetadataCleaner
             btnAddFolder.Click += btnAddFolder_Click;
             // 
             // btnStart
-            // 
+            //
             btnStart.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             btnStart.Location = new System.Drawing.Point(668, 12);
             btnStart.Name = "btnStart";
@@ -102,6 +103,16 @@ namespace PrivacyMetadataCleaner
             btnCompress.UseVisualStyleBackColor = true;
             btnCompress.Click += btnCompress_Click;
             //
+            // btnClearList
+            //
+            btnClearList.Location = new System.Drawing.Point(390, 12);
+            btnClearList.Name = "btnClearList";
+            btnClearList.Size = new System.Drawing.Size(120, 34);
+            btnClearList.TabIndex = 4;
+            btnClearList.Text = "清空列表";
+            btnClearList.UseVisualStyleBackColor = true;
+            btnClearList.Click += btnClearList_Click;
+            //
             // lvFiles
             //
             lvFiles.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
@@ -112,7 +123,7 @@ namespace PrivacyMetadataCleaner
             lvFiles.Location = new System.Drawing.Point(12, 56);
             lvFiles.Name = "lvFiles";
             lvFiles.Size = new System.Drawing.Size(776, 280);
-            lvFiles.TabIndex = 4;
+            lvFiles.TabIndex = 5;
             lvFiles.UseCompatibleStateImageBehavior = false;
             lvFiles.View = System.Windows.Forms.View.Details;
             lvFiles.ItemCheck += lvFiles_ItemCheck;
@@ -139,7 +150,7 @@ namespace PrivacyMetadataCleaner
             progressBar.Name = "progressBar";
             progressBar.Size = new System.Drawing.Size(776, 23);
             progressBar.Style = ProgressBarStyle.Continuous;
-            progressBar.TabIndex = 5;
+            progressBar.TabIndex = 6;
             // 
             // txtLog
             // 
@@ -150,7 +161,7 @@ namespace PrivacyMetadataCleaner
             txtLog.ReadOnly = true;
             txtLog.ScrollBars = ScrollBars.Vertical;
             txtLog.Size = new System.Drawing.Size(776, 165);
-            txtLog.TabIndex = 6;
+            txtLog.TabIndex = 7;
             // 
             // MainForm
             // 
@@ -160,6 +171,7 @@ namespace PrivacyMetadataCleaner
             Controls.Add(txtLog);
             Controls.Add(progressBar);
             Controls.Add(lvFiles);
+            Controls.Add(btnClearList);
             Controls.Add(btnCompress);
             Controls.Add(btnStart);
             Controls.Add(btnAddFolder);
@@ -305,6 +317,14 @@ namespace PrivacyMetadataCleaner
                 "完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
+        private void btnClearList_Click(object? sender, EventArgs e)
+        {
+            lvFiles.Items.Clear();
+            _listViewItems.Clear();
+            progressBar.Value = 0;
+            AppendLog("已清空文件列表。");
+        }
+
         private async Task StartProcessingAsync()
         {
             var filesToProcess = lvFiles.Items
@@ -383,6 +403,7 @@ namespace PrivacyMetadataCleaner
             btnAddFolder.Enabled = enabled;
             btnStart.Enabled = enabled;
             btnCompress.Enabled = enabled;
+            btnClearList.Enabled = enabled;
         }
 
         private void AddFiles(IEnumerable<string> files)
@@ -515,7 +536,7 @@ namespace PrivacyMetadataCleaner
 
             var qualityValue = GetQualityValue(quality);
             var pngCompressionLevel = GetPngCompressionLevel(quality);
-            var dimensionMultiplier = GetDimensionMultiplier(quality);
+            var resizeScale = GetResizeScale(quality);
             var placeholderSizes = BuildImagePlaceholderSizes(mainPart);
             var mainPartKey = mainPart.Uri?.ToString() ?? string.Empty;
 
@@ -558,7 +579,7 @@ namespace PrivacyMetadataCleaner
                 }
                 image.Quality = qualityValue;
 
-                var resizeGeometry = CalculateResizeGeometry(image, placeholderSize, dimensionMultiplier);
+                var resizeGeometry = CalculateResizeGeometry(image, placeholderSize, resizeScale);
                 if (resizeGeometry != null)
                 {
                     image.Resize(resizeGeometry);
@@ -672,54 +693,48 @@ namespace PrivacyMetadataCleaner
             return string.Concat(partKey, "|", relationshipId);
         }
 
-        private static MagickGeometry? CalculateResizeGeometry(MagickImage image, ImagePlaceholderSize placeholderSize, double multiplier)
+        private static MagickGeometry? CalculateResizeGeometry(MagickImage image, ImagePlaceholderSize placeholderSize, double scaleFactor)
         {
             if (image.Width <= 0 || image.Height <= 0)
             {
                 return null;
             }
 
-            double scale = 1.0;
+            var targetWidth = (int)Math.Round(image.Width * scaleFactor);
+            var targetHeight = (int)Math.Round(image.Height * scaleFactor);
 
             if (placeholderSize.Width > 0)
             {
-                var maxWidth = Math.Max(placeholderSize.Width, (int)Math.Round(placeholderSize.Width * multiplier));
-                if (image.Width > maxWidth)
-                {
-                    scale = Math.Min(scale, maxWidth / (double)image.Width);
-                }
+                targetWidth = Math.Max(placeholderSize.Width, targetWidth);
             }
 
             if (placeholderSize.Height > 0)
             {
-                var maxHeight = Math.Max(placeholderSize.Height, (int)Math.Round(placeholderSize.Height * multiplier));
-                if (image.Height > maxHeight)
-                {
-                    scale = Math.Min(scale, maxHeight / (double)image.Height);
-                }
+                targetHeight = Math.Max(placeholderSize.Height, targetHeight);
             }
 
-            if (scale < 0.999)
+            targetWidth = Math.Clamp(targetWidth, 1, image.Width);
+            targetHeight = Math.Clamp(targetHeight, 1, image.Height);
+
+            if (targetWidth == image.Width && targetHeight == image.Height)
             {
-                var targetWidth = Math.Max(1, (int)Math.Round(image.Width * scale));
-                var targetHeight = Math.Max(1, (int)Math.Round(image.Height * scale));
-                return new MagickGeometry(targetWidth, targetHeight)
-                {
-                    IgnoreAspectRatio = false
-                };
+                return null;
             }
 
-            return null;
+            return new MagickGeometry(targetWidth, targetHeight)
+            {
+                IgnoreAspectRatio = false
+            };
         }
 
-        private static double GetDimensionMultiplier(CompressionQuality quality)
+        private static double GetResizeScale(CompressionQuality quality)
         {
             return quality switch
             {
-                CompressionQuality.Low => 2.0,
-                CompressionQuality.Medium => 1.4,
-                CompressionQuality.High => 1.0,
-                _ => 1.4
+                CompressionQuality.Low => 0.85,
+                CompressionQuality.Medium => 0.7,
+                CompressionQuality.High => 0.5,
+                _ => 0.7
             };
         }
 
@@ -831,7 +846,7 @@ namespace PrivacyMetadataCleaner
                 $"压缩生效: {metrics.CompressedImages}",
                 $"节省空间: {FormatBytes(metrics.SavedBytes)}",
                 $"质量设置: {GetQualityValue(quality)}%",
-                $"尺寸上限: 占位尺寸 × {GetDimensionMultiplier(quality):0.##}"
+                $"尺寸缩放: 原图 × {GetResizeScale(quality):0.##}（不少于占位尺寸）"
             };
 
             return details;
@@ -1241,6 +1256,7 @@ namespace PrivacyMetadataCleaner
         private Button btnAddFolder = null!;
         private Button btnStart = null!;
         private Button btnCompress = null!;
+        private Button btnClearList = null!;
         private ListView lvFiles = null!;
         private ColumnHeader columnHeaderFile = null!;
         private ColumnHeader columnHeaderStatus = null!;
