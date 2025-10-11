@@ -43,9 +43,9 @@ namespace PrivacyMetadataCleaner
             cmbQuality.Width = 200;
             cmbQuality.DataSource = new List<ComboItem<CompressionQuality>>
             {
-                new ComboItem<CompressionQuality>("中（平衡）", CompressionQuality.Medium),
-                new ComboItem<CompressionQuality>("低（尺寸优先）", CompressionQuality.Low),
-                new ComboItem<CompressionQuality>("高（质量优先）", CompressionQuality.High)
+                new ComboItem<CompressionQuality>("中（标准压缩，约60%质量）", CompressionQuality.Medium),
+                new ComboItem<CompressionQuality>("低（轻度压缩，约80%质量）", CompressionQuality.Low),
+                new ComboItem<CompressionQuality>("高（强力压缩，约35%质量）", CompressionQuality.High)
             };
             if (cmbQuality.Items.Count > 0)
             {

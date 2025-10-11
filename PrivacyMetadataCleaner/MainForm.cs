@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.ExtendedProperties;
 using DocumentFormat.OpenXml.Packaging;
 using iText.IO.Image;
@@ -21,6 +22,7 @@ using WordBreak = DocumentFormat.OpenXml.Wordprocessing.Break;
 using WordDrawingElement = DocumentFormat.OpenXml.Wordprocessing.Drawing;
 using WordTable = DocumentFormat.OpenXml.Wordprocessing.Table;
 using DrawingBlip = DocumentFormat.OpenXml.Drawing.Blip;
+using WordDrawingExtent = DocumentFormat.OpenXml.Drawing.Wordprocessing.Extent;
 using IOPath = System.IO.Path;
 
 namespace PrivacyMetadataCleaner
@@ -29,6 +31,11 @@ namespace PrivacyMetadataCleaner
     {
         private readonly Dictionary<string, ListViewItem> _listViewItems = new(StringComparer.OrdinalIgnoreCase);
         private readonly object _logSyncRoot = new();
+
+        private readonly record struct ImagePlaceholderSize(int Width, int Height)
+        {
+            public static readonly ImagePlaceholderSize Empty = new(0, 0);
+        }
 
         private static readonly string[] SupportedExtensions =
         {
@@ -461,7 +468,7 @@ namespace PrivacyMetadataCleaner
                 File.Copy(sourcePath, tempDocxPath, true);
 
                 var metrics = CompressDocxImages(tempDocxPath, quality);
-                var details = BuildCompressionDetails(metrics);
+                var details = BuildCompressionDetails(metrics, quality);
 
                 if (format == CompressionOutputFormat.Docx)
                 {
@@ -508,6 +515,9 @@ namespace PrivacyMetadataCleaner
 
             var qualityValue = GetQualityValue(quality);
             var pngCompressionLevel = GetPngCompressionLevel(quality);
+            var dimensionMultiplier = GetDimensionMultiplier(quality);
+            var placeholderSizes = BuildImagePlaceholderSizes(mainPart);
+            var mainPartKey = mainPart.Uri?.ToString() ?? string.Empty;
 
             foreach (var imagePart in mainPart.ImageParts)
             {
@@ -527,9 +537,32 @@ namespace PrivacyMetadataCleaner
                     continue;
                 }
 
+                var relationshipId = mainPart.GetIdOfPart(imagePart);
+                var placeholderSize = ImagePlaceholderSize.Empty;
+                if (!string.IsNullOrEmpty(relationshipId))
+                {
+                    var lookupKey = BuildPlaceholderKey(mainPartKey, relationshipId);
+                    if (placeholderSizes.TryGetValue(lookupKey, out var mappedSize))
+                    {
+                        placeholderSize = mappedSize;
+                    }
+                }
+
                 using var image = new MagickImage(originalBytes);
+                image.AutoOrient();
+                var iccProfile = image.GetProfile("icc") ?? image.GetProfile("icm");
                 image.Strip();
+                if (iccProfile != null)
+                {
+                    image.SetProfile(iccProfile);
+                }
                 image.Quality = qualityValue;
+
+                var resizeGeometry = CalculateResizeGeometry(image, placeholderSize, dimensionMultiplier);
+                if (resizeGeometry != null)
+                {
+                    image.Resize(resizeGeometry);
+                }
 
                 if (image.Format == MagickFormat.Png)
                 {
@@ -540,7 +573,7 @@ namespace PrivacyMetadataCleaner
                 image.Write(compressedBuffer, image.Format);
                 var compressedBytes = compressedBuffer.ToArray();
 
-                if (compressedBytes.Length < originalLength)
+                if (compressedBytes.Length <= originalLength)
                 {
                     using (var targetStream = imagePart.GetStream(FileMode.Create, FileAccess.Write))
                     {
@@ -548,11 +581,146 @@ namespace PrivacyMetadataCleaner
                     }
 
                     compressedImages++;
-                    savedBytes += originalLength - compressedBytes.Length;
+                    savedBytes += Math.Max(0, originalLength - compressedBytes.Length);
                 }
             }
 
             return new CompressionMetrics(totalImages, compressedImages, savedBytes);
+        }
+
+        private static Dictionary<string, ImagePlaceholderSize> BuildImagePlaceholderSizes(MainDocumentPart mainPart)
+        {
+            var result = new Dictionary<string, ImagePlaceholderSize>(StringComparer.OrdinalIgnoreCase);
+            var mainPartKey = mainPart.Uri?.ToString() ?? string.Empty;
+
+            if (mainPart.Document?.Body != null)
+            {
+                CollectPlaceholderSizes(mainPart.Document.Body, result, mainPartKey);
+            }
+
+            foreach (var headerPart in mainPart.HeaderParts)
+            {
+                if (headerPart.Header != null)
+                {
+                    CollectPlaceholderSizes(headerPart.Header, result, headerPart.Uri?.ToString() ?? string.Empty);
+                }
+            }
+
+            foreach (var footerPart in mainPart.FooterParts)
+            {
+                if (footerPart.Footer != null)
+                {
+                    CollectPlaceholderSizes(footerPart.Footer, result, footerPart.Uri?.ToString() ?? string.Empty);
+                }
+            }
+
+            return result;
+        }
+
+        private static void CollectPlaceholderSizes(OpenXmlElement root, IDictionary<string, ImagePlaceholderSize> results, string partKey)
+        {
+            foreach (var drawing in root.Descendants<WordDrawingElement>())
+            {
+                var blip = drawing.Descendants<DrawingBlip>().FirstOrDefault();
+                var relationshipId = blip?.Embed?.Value;
+
+                if (string.IsNullOrEmpty(relationshipId))
+                {
+                    continue;
+                }
+
+                var extent = drawing.Descendants<WordDrawingExtent>().FirstOrDefault();
+                if (extent == null)
+                {
+                    continue;
+                }
+
+                var width = EmuToPixels(extent.Cx?.Value);
+                var height = EmuToPixels(extent.Cy?.Value);
+
+                if (width == 0 && height == 0)
+                {
+                    continue;
+                }
+
+                var key = BuildPlaceholderKey(partKey, relationshipId);
+
+                if (results.TryGetValue(key, out var existing))
+                {
+                    width = Math.Max(width, existing.Width);
+                    height = Math.Max(height, existing.Height);
+                }
+
+                results[key] = new ImagePlaceholderSize(width, height);
+            }
+        }
+
+        private static int EmuToPixels(long? emu)
+        {
+            if (!emu.HasValue || emu.Value <= 0)
+            {
+                return 0;
+            }
+
+            const double emuPerInch = 914400d;
+            const double defaultDpi = 96d;
+            return (int)Math.Max(1, Math.Round(emu.Value / emuPerInch * defaultDpi));
+        }
+
+        private static string BuildPlaceholderKey(string partKey, string relationshipId)
+        {
+            return string.Concat(partKey, "|", relationshipId);
+        }
+
+        private static MagickGeometry? CalculateResizeGeometry(MagickImage image, ImagePlaceholderSize placeholderSize, double multiplier)
+        {
+            if (image.Width <= 0 || image.Height <= 0)
+            {
+                return null;
+            }
+
+            double scale = 1.0;
+
+            if (placeholderSize.Width > 0)
+            {
+                var maxWidth = Math.Max(placeholderSize.Width, (int)Math.Round(placeholderSize.Width * multiplier));
+                if (image.Width > maxWidth)
+                {
+                    scale = Math.Min(scale, maxWidth / (double)image.Width);
+                }
+            }
+
+            if (placeholderSize.Height > 0)
+            {
+                var maxHeight = Math.Max(placeholderSize.Height, (int)Math.Round(placeholderSize.Height * multiplier));
+                if (image.Height > maxHeight)
+                {
+                    scale = Math.Min(scale, maxHeight / (double)image.Height);
+                }
+            }
+
+            if (scale < 0.999)
+            {
+                var targetWidth = Math.Max(1, (int)Math.Round(image.Width * scale));
+                var targetHeight = Math.Max(1, (int)Math.Round(image.Height * scale));
+                return new MagickGeometry(targetWidth, targetHeight)
+                {
+                    IgnoreAspectRatio = false
+                };
+            }
+
+            return null;
+        }
+
+        private static double GetDimensionMultiplier(CompressionQuality quality)
+        {
+            return quality switch
+            {
+                CompressionQuality.Low => 2.0,
+                CompressionQuality.Medium => 1.4,
+                CompressionQuality.High => 1.0,
+                _ => 1.4
+            };
         }
 
         private void ConvertDocxToPdf(string sourceDocxPath, string targetPdfPath)
@@ -655,13 +823,15 @@ namespace PrivacyMetadataCleaner
             return image;
         }
 
-        private static List<string> BuildCompressionDetails(CompressionMetrics metrics)
+        private static List<string> BuildCompressionDetails(CompressionMetrics metrics, CompressionQuality quality)
         {
             var details = new List<string>
             {
                 $"图片数量: {metrics.TotalImages}",
                 $"压缩生效: {metrics.CompressedImages}",
-                $"节省空间: {FormatBytes(metrics.SavedBytes)}"
+                $"节省空间: {FormatBytes(metrics.SavedBytes)}",
+                $"质量设置: {GetQualityValue(quality)}%",
+                $"尺寸上限: 占位尺寸 × {GetDimensionMultiplier(quality):0.##}"
             };
 
             return details;
@@ -696,9 +866,9 @@ namespace PrivacyMetadataCleaner
         {
             return quality switch
             {
-                CompressionQuality.Low => 40,
+                CompressionQuality.Low => 80,
                 CompressionQuality.Medium => 60,
-                CompressionQuality.High => 80,
+                CompressionQuality.High => 35,
                 _ => 60
             };
         }
@@ -707,9 +877,9 @@ namespace PrivacyMetadataCleaner
         {
             return quality switch
             {
-                CompressionQuality.Low => 9,
+                CompressionQuality.Low => 3,
                 CompressionQuality.Medium => 6,
-                CompressionQuality.High => 3,
+                CompressionQuality.High => 9,
                 _ => 6
             };
         }
