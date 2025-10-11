@@ -436,7 +436,7 @@ namespace PrivacyMetadataCleaner
                     ClearPdfInfo(info.GetSubject(), value => info.SetSubject(value), "主题", clearedFields);
                     ClearPdfInfo(info.GetTitle(), value => info.SetTitle(value), "标题", clearedFields);
 
-                    var infoDictionary = info.GetPdfObject();
+                    var infoDictionary = pdfDoc.GetTrailer()?.GetAsDictionary(PdfName.Info);
                     if (infoDictionary != null)
                     {
                         var standardKeys = new HashSet<PdfName>
