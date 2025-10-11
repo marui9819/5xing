@@ -43,13 +43,13 @@ namespace PrivacyMetadataCleaner
             cmbQuality.Width = 200;
             cmbQuality.DataSource = new List<ComboItem<CompressionQuality>>
             {
-                new ComboItem<CompressionQuality>("低（尺寸优先）", CompressionQuality.Low),
                 new ComboItem<CompressionQuality>("中（平衡）", CompressionQuality.Medium),
+                new ComboItem<CompressionQuality>("低（尺寸优先）", CompressionQuality.Low),
                 new ComboItem<CompressionQuality>("高（质量优先）", CompressionQuality.High)
             };
-            if (cmbQuality.Items.Count > 1)
+            if (cmbQuality.Items.Count > 0)
             {
-                cmbQuality.SelectedIndex = 1;
+                cmbQuality.SelectedIndex = 0;
             }
 
             lblFormat.AutoSize = true;
