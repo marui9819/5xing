@@ -38,6 +38,7 @@ namespace PrivacyMetadataCleaner
             lblQuality.Text = "压缩级别：";
 
             cmbQuality.DropDownStyle = ComboBoxStyle.DropDownList;
+            cmbQuality.FormattingEnabled = true;
             cmbQuality.Location = new System.Drawing.Point(130, 24);
             cmbQuality.Width = 200;
             cmbQuality.DataSource = new List<ComboItem<CompressionQuality>>
@@ -46,13 +47,17 @@ namespace PrivacyMetadataCleaner
                 new ComboItem<CompressionQuality>("中（平衡）", CompressionQuality.Medium),
                 new ComboItem<CompressionQuality>("高（质量优先）", CompressionQuality.High)
             };
-            cmbQuality.SelectedIndex = 1;
+            if (cmbQuality.Items.Count > 1)
+            {
+                cmbQuality.SelectedIndex = 1;
+            }
 
             lblFormat.AutoSize = true;
             lblFormat.Location = new System.Drawing.Point(24, 78);
             lblFormat.Text = "输出格式：";
 
             cmbFormat.DropDownStyle = ComboBoxStyle.DropDownList;
+            cmbFormat.FormattingEnabled = true;
             cmbFormat.Location = new System.Drawing.Point(130, 74);
             cmbFormat.Width = 200;
             cmbFormat.DataSource = new List<ComboItem<CompressionOutputFormat>>
@@ -60,6 +65,10 @@ namespace PrivacyMetadataCleaner
                 new ComboItem<CompressionOutputFormat>("Word 文档 (*.docx)", CompressionOutputFormat.Docx),
                 new ComboItem<CompressionOutputFormat>("PDF 文档 (*.pdf)", CompressionOutputFormat.Pdf)
             };
+            if (cmbFormat.Items.Count > 0)
+            {
+                cmbFormat.SelectedIndex = 0;
+            }
 
             btnOk.Text = "确定";
             btnOk.Location = new System.Drawing.Point(170, 124);
