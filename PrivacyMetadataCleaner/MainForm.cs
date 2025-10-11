@@ -540,7 +540,11 @@ namespace PrivacyMetadataCleaner
 
                     if (!changed)
                     {
-                        return new FileProcessResult(filePath, FileProcessStatus.Skipped, clearedFields, "未检测到可清理的元数据");
+                        return new FileProcessResult(
+                            filePath,
+                            FileProcessStatus.Skipped,
+                            clearedFields,
+                            "未检测到可清理的元数据");
                     }
 
                     image.Write(tempFile);
@@ -575,16 +579,24 @@ namespace PrivacyMetadataCleaner
             }
         }
 
-        private static void ClearStringProperty(string? currentValue, Action<string> setter, string propertyName, ICollection<string> clearedFields)
+        private static void ClearStringProperty(
+            string? currentValue,
+            Action<string?> setter,
+            string propertyName,
+            ICollection<string> clearedFields)
         {
             if (!string.IsNullOrEmpty(currentValue))
             {
-                setter(string.Empty);
+                setter(null);
                 clearedFields.Add(propertyName);
             }
         }
 
-        private static void ClearPdfInfo(string? currentValue, Action<string> setter, string propertyName, ICollection<string> clearedFields)
+        private static void ClearPdfInfo(
+            string? currentValue,
+            Action<string?> setter,
+            string propertyName,
+            ICollection<string> clearedFields)
         {
             if (!string.IsNullOrEmpty(currentValue))
             {
