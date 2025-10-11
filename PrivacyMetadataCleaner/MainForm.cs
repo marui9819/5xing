@@ -513,13 +513,21 @@ namespace PrivacyMetadataCleaner
             {
                 totalImages++;
 
-                using var sourceStream = imagePart.GetStream(FileMode.Open, FileAccess.Read);
-                using var sourceBuffer = new MemoryStream();
-                sourceStream.CopyTo(sourceBuffer);
-                var originalLength = sourceBuffer.Length;
-                sourceBuffer.Position = 0;
+                byte[] originalBytes;
+                using (var sourceStream = imagePart.GetStream(FileMode.Open, FileAccess.Read))
+                using (var sourceBuffer = new MemoryStream())
+                {
+                    sourceStream.CopyTo(sourceBuffer);
+                    originalBytes = sourceBuffer.ToArray();
+                }
 
-                using var image = new MagickImage(sourceBuffer);
+                var originalLength = originalBytes.Length;
+                if (originalLength == 0)
+                {
+                    continue;
+                }
+
+                using var image = new MagickImage(originalBytes);
                 image.Strip();
                 image.Quality = qualityValue;
 
@@ -530,14 +538,17 @@ namespace PrivacyMetadataCleaner
 
                 using var compressedBuffer = new MemoryStream();
                 image.Write(compressedBuffer, image.Format);
+                var compressedBytes = compressedBuffer.ToArray();
 
-                if (compressedBuffer.Length < originalLength)
+                if (compressedBytes.Length < originalLength)
                 {
-                    compressedBuffer.Position = 0;
-                    using var targetStream = imagePart.GetStream(FileMode.Create, FileAccess.Write);
-                    compressedBuffer.CopyTo(targetStream);
+                    using (var targetStream = imagePart.GetStream(FileMode.Create, FileAccess.Write))
+                    {
+                        targetStream.Write(compressedBytes, 0, compressedBytes.Length);
+                    }
+
                     compressedImages++;
-                    savedBytes += originalLength - compressedBuffer.Length;
+                    savedBytes += originalLength - compressedBytes.Length;
                 }
             }
 
