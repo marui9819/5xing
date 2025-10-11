@@ -14,6 +14,10 @@ using iText.Kernel.Pdf;
 using iText.Layout;
 using iText.Layout.Element;
 using ImageMagick;
+using PdfLayoutDocument = iText.Layout.Document;
+using PdfParagraph = iText.Layout.Element.Paragraph;
+using PdfImageElement = iText.Layout.Element.Image;
+using WordParagraph = DocumentFormat.OpenXml.Wordprocessing.Paragraph;
 
 namespace PrivacyMetadataCleaner
 {
@@ -542,7 +546,7 @@ namespace PrivacyMetadataCleaner
         {
             using var pdfWriter = new PdfWriter(targetPdfPath);
             using var pdfDocument = new PdfDocument(pdfWriter);
-            using var pdf = new Document(pdfDocument);
+            using var pdf = new PdfLayoutDocument(pdfDocument);
 
             using var wordDocument = WordprocessingDocument.Open(sourceDocxPath, false);
             var mainPart = wordDocument.MainDocumentPart;
@@ -555,23 +559,23 @@ namespace PrivacyMetadataCleaner
             {
                 switch (element)
                 {
-                    case Paragraph paragraph:
+                    case WordParagraph paragraph:
                         AddParagraphToPdf(paragraph, mainPart, pdf);
                         break;
                     case Table table:
                         var tableText = table.InnerText;
                         if (!string.IsNullOrWhiteSpace(tableText))
                         {
-                            pdf.Add(new Paragraph(tableText));
+                            pdf.Add(new PdfParagraph(tableText));
                         }
                         break;
                 }
             }
         }
 
-        private void AddParagraphToPdf(Paragraph paragraph, MainDocumentPart mainPart, Document pdf)
+        private void AddParagraphToPdf(WordParagraph paragraph, MainDocumentPart mainPart, PdfLayoutDocument pdf)
         {
-            var pdfParagraph = new Paragraph();
+            var pdfParagraph = new PdfParagraph();
             var hasContent = false;
 
             foreach (var run in paragraph.Elements<Run>())
@@ -610,7 +614,7 @@ namespace PrivacyMetadataCleaner
             pdf.Add(pdfParagraph);
         }
 
-        private Image? CreatePdfImageFromDrawing(Drawing drawing, MainDocumentPart mainPart)
+        private PdfImageElement? CreatePdfImageFromDrawing(Drawing drawing, MainDocumentPart mainPart)
         {
             var blip = drawing.Descendants<DocumentFormat.OpenXml.Drawing.Blip>().FirstOrDefault();
             if (blip?.Embed == null)
@@ -633,7 +637,7 @@ namespace PrivacyMetadataCleaner
             using var buffer = new MemoryStream();
             stream.CopyTo(buffer);
             var imageData = ImageDataFactory.Create(buffer.ToArray());
-            var image = new Image(imageData);
+            var image = new PdfImageElement(imageData);
             image.SetAutoScale(true);
             return image;
         }
