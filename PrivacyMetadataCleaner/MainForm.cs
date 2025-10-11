@@ -4,16 +4,21 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Drawing;
+using DocumentFormat.OpenXml.Drawing.Wordprocessing;
 using DocumentFormat.OpenXml.ExtendedProperties;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Wordprocessing;
+using iText.IO.Image;
 using iText.Kernel.Pdf;
+using iText.Layout;
+using iText.Layout.Element;
 using ImageMagick;
 
 namespace PrivacyMetadataCleaner
 {
     public partial class MainForm : Form
     {
-        private readonly HashSet<string> _pendingFiles = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, ListViewItem> _listViewItems = new(StringComparer.OrdinalIgnoreCase);
         private readonly object _logSyncRoot = new();
 
@@ -32,7 +37,7 @@ namespace PrivacyMetadataCleaner
             btnAddFiles = new Button();
             btnAddFolder = new Button();
             btnStart = new Button();
-            btnSaveLog = new Button();
+            btnCompress = new Button();
             lvFiles = new ListView();
             columnHeaderFile = new ColumnHeader();
             columnHeaderStatus = new ColumnHeader();
@@ -71,22 +76,22 @@ namespace PrivacyMetadataCleaner
             btnStart.Text = "开始处理";
             btnStart.UseVisualStyleBackColor = true;
             btnStart.Click += btnStart_Click;
-            // 
-            // btnSaveLog
-            // 
-            btnSaveLog.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            btnSaveLog.Location = new System.Drawing.Point(542, 12);
-            btnSaveLog.Name = "btnSaveLog";
-            btnSaveLog.Size = new System.Drawing.Size(120, 34);
-            btnSaveLog.TabIndex = 3;
-            btnSaveLog.Text = "保存日志";
-            btnSaveLog.UseVisualStyleBackColor = true;
-            btnSaveLog.Click += btnSaveLog_Click;
-            // 
+            //
+            // btnCompress
+            //
+            btnCompress.Location = new System.Drawing.Point(264, 12);
+            btnCompress.Name = "btnCompress";
+            btnCompress.Size = new System.Drawing.Size(120, 34);
+            btnCompress.TabIndex = 3;
+            btnCompress.Text = "文档压缩";
+            btnCompress.UseVisualStyleBackColor = true;
+            btnCompress.Click += btnCompress_Click;
+            //
             // lvFiles
-            // 
+            //
             lvFiles.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             lvFiles.Columns.AddRange(new[] { columnHeaderFile, columnHeaderStatus, columnHeaderMetadata });
+            lvFiles.CheckBoxes = true;
             lvFiles.FullRowSelect = true;
             lvFiles.GridLines = true;
             lvFiles.Location = new System.Drawing.Point(12, 56);
@@ -95,9 +100,10 @@ namespace PrivacyMetadataCleaner
             lvFiles.TabIndex = 4;
             lvFiles.UseCompatibleStateImageBehavior = false;
             lvFiles.View = View.Details;
-            // 
+            lvFiles.ItemCheck += lvFiles_ItemCheck;
+            //
             // columnHeaderFile
-            // 
+            //
             columnHeaderFile.Text = "文件";
             columnHeaderFile.Width = 360;
             // 
@@ -139,7 +145,7 @@ namespace PrivacyMetadataCleaner
             Controls.Add(txtLog);
             Controls.Add(progressBar);
             Controls.Add(lvFiles);
-            Controls.Add(btnSaveLog);
+            Controls.Add(btnCompress);
             Controls.Add(btnStart);
             Controls.Add(btnAddFolder);
             Controls.Add(btnAddFiles);
@@ -180,35 +186,124 @@ namespace PrivacyMetadataCleaner
             }
         }
 
+        private void lvFiles_ItemCheck(object? sender, ItemCheckEventArgs e)
+        {
+            if (e.Index < 0 || e.Index >= lvFiles.Items.Count)
+            {
+                return;
+            }
+
+            var item = lvFiles.Items[e.Index];
+            if (e.NewValue == CheckState.Unchecked && item.SubItems.Count > 1)
+            {
+                item.SubItems[1].Text = "未选中";
+            }
+            else if (e.NewValue == CheckState.Checked && item.SubItems.Count > 1)
+            {
+                if (string.Equals(item.SubItems[1].Text, "未选中", StringComparison.OrdinalIgnoreCase))
+                {
+                    item.SubItems[1].Text = "等待";
+                }
+            }
+        }
+
         private async void btnStart_Click(object? sender, EventArgs e)
         {
             await StartProcessingAsync();
         }
 
-        private void btnSaveLog_Click(object? sender, EventArgs e)
+        private async void btnCompress_Click(object? sender, EventArgs e)
         {
-            using var dialog = new SaveFileDialog
-            {
-                Title = "保存日志",
-                Filter = "文本文件|*.txt|所有文件|*.*",
-                FileName = $"PrivacyMetadataCleaner_{DateTime.Now:yyyyMMdd_HHmmss}.txt"
-            };
+            var docxFiles = lvFiles.Items
+                .Cast<ListViewItem>()
+                .Where(item => item.Checked)
+                .Select(item => item.Tag as string)
+                .Where(path => !string.IsNullOrEmpty(path) && string.Equals(Path.GetExtension(path), ".docx", StringComparison.OrdinalIgnoreCase))
+                .Select(path => path!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
-            if (dialog.ShowDialog(this) == DialogResult.OK)
+            if (docxFiles.Count == 0)
             {
-                File.WriteAllText(dialog.FileName, txtLog.Text);
+                MessageBox.Show(this, "请先勾选需要压缩的 Word 文档。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
             }
+
+            using var optionsDialog = new CompressionOptionsForm();
+            if (optionsDialog.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            ToggleUi(false);
+            progressBar.Value = 0;
+            progressBar.Maximum = docxFiles.Count;
+            AppendLog($"开始压缩 {docxFiles.Count} 个文档...");
+
+            int processed = 0;
+            int success = 0;
+            int failed = 0;
+
+            foreach (var filePath in docxFiles)
+            {
+                AppendLog($"压缩: {filePath}");
+
+                if (_listViewItems.TryGetValue(filePath, out var item))
+                {
+                    item.SubItems[1].Text = "压缩中";
+                }
+
+                var result = await Task.Run(() => CompressDocxDocument(filePath, optionsDialog.SelectedQuality, optionsDialog.SelectedFormat));
+                processed++;
+
+                if (result.Success)
+                {
+                    success++;
+                    AppendLog($"压缩成功: {result.OutputPath}");
+
+                    if (_listViewItems.TryGetValue(filePath, out var successItem))
+                    {
+                        successItem.SubItems[1].Text = "压缩成功";
+                        successItem.SubItems[2].Text = string.Join(", ", result.Details);
+                    }
+                }
+                else
+                {
+                    failed++;
+                    AppendLog($"压缩失败: {result.ErrorMessage}");
+
+                    if (_listViewItems.TryGetValue(filePath, out var failedItem))
+                    {
+                        failedItem.SubItems[1].Text = "压缩失败";
+                        failedItem.SubItems[2].Text = result.ErrorMessage;
+                    }
+                }
+
+                progressBar.Value = Math.Min(progressBar.Maximum, processed);
+            }
+
+            ToggleUi(true);
+
+            AppendLog($"压缩完成。成功: {success}，失败: {failed}");
+            MessageBox.Show(this,
+                $"压缩完成！\n总数: {processed}\n成功: {success}\n失败: {failed}",
+                "完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private async Task StartProcessingAsync()
         {
-            if (_pendingFiles.Count == 0)
+            var filesToProcess = lvFiles.Items
+                .Cast<ListViewItem>()
+                .Where(item => item.Checked)
+                .Select(item => (string)item.Tag)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (filesToProcess.Count == 0)
             {
-                MessageBox.Show(this, "请先添加要处理的文件。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(this, "请先选择要处理的文件。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
-
-            var filesToProcess = _pendingFiles.ToList();
 
             ToggleUi(false);
             progressBar.Value = 0;
@@ -225,9 +320,13 @@ namespace PrivacyMetadataCleaner
                 var currentIndex = processed + 1;
                 AppendLog($"[{currentIndex}/{filesToProcess.Count}] 处理: {filePath}");
 
+                if (_listViewItems.TryGetValue(filePath, out var pendingItem))
+                {
+                    pendingItem.SubItems[1].Text = "处理中";
+                }
+
                 var result = await Task.Run(() => ProcessFile(filePath));
                 processed++;
-                _pendingFiles.Remove(filePath);
 
                 switch (result.Status)
                 {
@@ -266,7 +365,7 @@ namespace PrivacyMetadataCleaner
             btnAddFiles.Enabled = enabled;
             btnAddFolder.Enabled = enabled;
             btnStart.Enabled = enabled;
-            btnSaveLog.Enabled = enabled;
+            btnCompress.Enabled = enabled;
         }
 
         private void AddFiles(IEnumerable<string> files)
@@ -285,15 +384,10 @@ namespace PrivacyMetadataCleaner
                     continue;
                 }
 
-                if (_pendingFiles.Contains(file))
+                if (_listViewItems.ContainsKey(file))
                 {
-                    continue;
-                }
-
-                _pendingFiles.Add(file);
-
-                if (_listViewItems.TryGetValue(file, out var existingItem))
-                {
+                    var existingItem = _listViewItems[file];
+                    existingItem.Checked = true;
                     existingItem.SubItems[1].Text = "等待";
                     existingItem.SubItems[2].Text = string.Empty;
                     added++;
@@ -302,7 +396,8 @@ namespace PrivacyMetadataCleaner
 
                 var item = new ListViewItem(file)
                 {
-                    Tag = file
+                    Tag = file,
+                    Checked = true
                 };
                 item.SubItems.Add("等待");
                 item.SubItems.Add(string.Empty);
@@ -313,7 +408,7 @@ namespace PrivacyMetadataCleaner
 
             if (added > 0)
             {
-                AppendLog($"已添加 {added} 个文件。当前总数: {_pendingFiles.Count}");
+                AppendLog($"已添加 {added} 个文件。当前列表总数: {lvFiles.Items.Count}");
             }
         }
 
@@ -345,6 +440,281 @@ namespace PrivacyMetadataCleaner
             {
                 return new FileProcessResult(filePath, FileProcessStatus.Failed, new List<string>(), ex.Message);
             }
+        }
+
+        private CompressionResult CompressDocxDocument(string sourcePath, CompressionQuality quality, CompressionOutputFormat format)
+        {
+            var tempDocxPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.docx");
+
+            try
+            {
+                File.Copy(sourcePath, tempDocxPath, true);
+
+                var metrics = CompressDocxImages(tempDocxPath, quality);
+                var details = BuildCompressionDetails(metrics);
+
+                if (format == CompressionOutputFormat.Docx)
+                {
+                    var targetPath = BuildOutputPath(sourcePath, ".docx");
+                    File.Copy(tempDocxPath, targetPath, true);
+                    return new CompressionResult(true, targetPath, details, string.Empty);
+                }
+
+                var pdfTarget = BuildOutputPath(sourcePath, ".pdf");
+                ConvertDocxToPdf(tempDocxPath, pdfTarget);
+                details.Add("输出格式: PDF");
+                return new CompressionResult(true, pdfTarget, details, string.Empty);
+            }
+            catch (Exception ex)
+            {
+                return new CompressionResult(false, string.Empty, new List<string>(), ex.Message);
+            }
+            finally
+            {
+                if (File.Exists(tempDocxPath))
+                {
+                    File.Delete(tempDocxPath);
+                }
+            }
+        }
+
+        private static CompressionMetrics CompressDocxImages(string docxPath, CompressionQuality quality)
+        {
+            if (!File.Exists(docxPath))
+            {
+                return new CompressionMetrics(0, 0, 0);
+            }
+
+            using var document = WordprocessingDocument.Open(docxPath, true);
+            var mainPart = document.MainDocumentPart;
+            if (mainPart == null)
+            {
+                return new CompressionMetrics(0, 0, 0);
+            }
+
+            var totalImages = 0;
+            var compressedImages = 0;
+            long savedBytes = 0;
+
+            var qualityValue = GetQualityValue(quality);
+            var pngCompressionLevel = GetPngCompressionLevel(quality);
+
+            foreach (var imagePart in mainPart.ImageParts)
+            {
+                totalImages++;
+
+                using var sourceStream = imagePart.GetStream(FileMode.Open, FileAccess.Read);
+                using var sourceBuffer = new MemoryStream();
+                sourceStream.CopyTo(sourceBuffer);
+                var originalLength = sourceBuffer.Length;
+                sourceBuffer.Position = 0;
+
+                using var image = new MagickImage(sourceBuffer);
+                image.Strip();
+                image.Quality = qualityValue;
+
+                if (image.Format == MagickFormat.Png)
+                {
+                    image.SetDefine(MagickFormat.Png, "compression-level", pngCompressionLevel);
+                }
+                else if (image.Format == MagickFormat.Jpeg || image.Format == MagickFormat.Jpg)
+                {
+                    image.Interlace = Interlace.No;
+                }
+
+                using var compressedBuffer = new MemoryStream();
+                image.Write(compressedBuffer, image.Format);
+
+                if (compressedBuffer.Length < originalLength)
+                {
+                    compressedBuffer.Position = 0;
+                    using var targetStream = imagePart.GetStream(FileMode.Create, FileAccess.Write);
+                    compressedBuffer.CopyTo(targetStream);
+                    compressedImages++;
+                    savedBytes += originalLength - compressedBuffer.Length;
+                }
+            }
+
+            return new CompressionMetrics(totalImages, compressedImages, savedBytes);
+        }
+
+        private void ConvertDocxToPdf(string sourceDocxPath, string targetPdfPath)
+        {
+            using var pdfWriter = new PdfWriter(targetPdfPath);
+            using var pdfDocument = new PdfDocument(pdfWriter);
+            using var pdf = new Document(pdfDocument);
+
+            using var wordDocument = WordprocessingDocument.Open(sourceDocxPath, false);
+            var mainPart = wordDocument.MainDocumentPart;
+            if (mainPart?.Document?.Body == null)
+            {
+                return;
+            }
+
+            foreach (var element in mainPart.Document.Body.Elements())
+            {
+                switch (element)
+                {
+                    case Paragraph paragraph:
+                        AddParagraphToPdf(paragraph, mainPart, pdf);
+                        break;
+                    case Table table:
+                        var tableText = table.InnerText;
+                        if (!string.IsNullOrWhiteSpace(tableText))
+                        {
+                            pdf.Add(new Paragraph(tableText));
+                        }
+                        break;
+                }
+            }
+        }
+
+        private void AddParagraphToPdf(Paragraph paragraph, MainDocumentPart mainPart, Document pdf)
+        {
+            var pdfParagraph = new Paragraph();
+            var hasContent = false;
+
+            foreach (var run in paragraph.Elements<Run>())
+            {
+                foreach (var text in run.Elements<Text>())
+                {
+                    if (!string.IsNullOrEmpty(text.Text))
+                    {
+                        pdfParagraph.Add(text.Text);
+                        hasContent = true;
+                    }
+                }
+
+                foreach (var br in run.Elements<Break>())
+                {
+                    pdfParagraph.Add(Environment.NewLine);
+                    hasContent = true;
+                }
+
+                foreach (var drawing in run.Elements<Drawing>())
+                {
+                    var imageElement = CreatePdfImageFromDrawing(drawing, mainPart);
+                    if (imageElement != null)
+                    {
+                        pdfParagraph.Add(imageElement);
+                        hasContent = true;
+                    }
+                }
+            }
+
+            if (!hasContent)
+            {
+                pdfParagraph.Add(string.Empty);
+            }
+
+            pdf.Add(pdfParagraph);
+        }
+
+        private Image? CreatePdfImageFromDrawing(Drawing drawing, MainDocumentPart mainPart)
+        {
+            var blip = drawing.Descendants<DocumentFormat.OpenXml.Drawing.Blip>().FirstOrDefault();
+            if (blip?.Embed == null)
+            {
+                return null;
+            }
+
+            var relationshipId = blip.Embed.Value;
+            if (string.IsNullOrEmpty(relationshipId))
+            {
+                return null;
+            }
+
+            if (mainPart.GetPartById(relationshipId) is not ImagePart imagePart)
+            {
+                return null;
+            }
+
+            using var stream = imagePart.GetStream(FileMode.Open, FileAccess.Read);
+            using var buffer = new MemoryStream();
+            stream.CopyTo(buffer);
+            var imageData = ImageDataFactory.Create(buffer.ToArray());
+            var image = new Image(imageData);
+            image.SetAutoScale(true);
+            return image;
+        }
+
+        private static List<string> BuildCompressionDetails(CompressionMetrics metrics)
+        {
+            var details = new List<string>
+            {
+                $"图片数量: {metrics.TotalImages}",
+                $"压缩生效: {metrics.CompressedImages}",
+                $"节省空间: {FormatBytes(metrics.SavedBytes)}"
+            };
+
+            return details;
+        }
+
+        private static string BuildOutputPath(string sourcePath, string newExtension)
+        {
+            var directory = Path.GetDirectoryName(sourcePath) ?? string.Empty;
+            var fileName = Path.GetFileNameWithoutExtension(sourcePath);
+            var extension = newExtension.StartsWith('.') ? newExtension : $".{newExtension}";
+            var candidate = Path.Combine(directory, $"{fileName}_s{extension}");
+
+            if (!File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            var index = 1;
+            while (true)
+            {
+                var nextCandidate = Path.Combine(directory, $"{fileName}_s({index}){extension}");
+                if (!File.Exists(nextCandidate))
+                {
+                    return nextCandidate;
+                }
+
+                index++;
+            }
+        }
+
+        private static int GetQualityValue(CompressionQuality quality)
+        {
+            return quality switch
+            {
+                CompressionQuality.Low => 40,
+                CompressionQuality.Medium => 60,
+                CompressionQuality.High => 80,
+                _ => 60
+            };
+        }
+
+        private static int GetPngCompressionLevel(CompressionQuality quality)
+        {
+            return quality switch
+            {
+                CompressionQuality.Low => 9,
+                CompressionQuality.Medium => 6,
+                CompressionQuality.High => 3,
+                _ => 6
+            };
+        }
+
+        private static string FormatBytes(long bytes)
+        {
+            if (bytes <= 0)
+            {
+                return "0 B";
+            }
+
+            string[] units = { "B", "KB", "MB", "GB", "TB" };
+            double size = bytes;
+            var unitIndex = 0;
+
+            while (size >= 1024 && unitIndex < units.Length - 1)
+            {
+                size /= 1024;
+                unitIndex++;
+            }
+
+            return $"{Math.Round(size, 2)} {units[unitIndex]}";
         }
 
         private FileProcessResult CleanDocx(string filePath)
@@ -683,7 +1053,7 @@ namespace PrivacyMetadataCleaner
         private Button btnAddFiles = null!;
         private Button btnAddFolder = null!;
         private Button btnStart = null!;
-        private Button btnSaveLog = null!;
+        private Button btnCompress = null!;
         private ListView lvFiles = null!;
         private ColumnHeader columnHeaderFile = null!;
         private ColumnHeader columnHeaderStatus = null!;
@@ -714,6 +1084,54 @@ namespace PrivacyMetadataCleaner
         public FileProcessStatus Status { get; }
 
         public List<string> ClearedMetadata { get; }
+
+        public string ErrorMessage { get; }
+    }
+
+    internal enum CompressionQuality
+    {
+        Low,
+        Medium,
+        High
+    }
+
+    internal enum CompressionOutputFormat
+    {
+        Docx,
+        Pdf
+    }
+
+    internal sealed class CompressionMetrics
+    {
+        public CompressionMetrics(int totalImages, int compressedImages, long savedBytes)
+        {
+            TotalImages = totalImages;
+            CompressedImages = compressedImages;
+            SavedBytes = savedBytes;
+        }
+
+        public int TotalImages { get; }
+
+        public int CompressedImages { get; }
+
+        public long SavedBytes { get; }
+    }
+
+    internal sealed class CompressionResult
+    {
+        public CompressionResult(bool success, string outputPath, List<string> details, string errorMessage)
+        {
+            Success = success;
+            OutputPath = outputPath;
+            Details = details;
+            ErrorMessage = errorMessage;
+        }
+
+        public bool Success { get; }
+
+        public string OutputPath { get; }
+
+        public List<string> Details { get; }
 
         public string ErrorMessage { get; }
     }
