@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="PrivacyMetadataCleaner.Pages.MainPage"
+             Title="Privacy Metadata Cleaner">
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="20">
+            <Label Text="拖放 Word、PDF 或图像文件到下面的区域以批量清理元数据。" FontSize="18" FontAttributes="Bold" />
+            <Border Padding="40,48" HorizontalOptions="Fill" VerticalOptions="CenterAndExpand">
+                <Grid>
+                    <Grid.GestureRecognizers>
+                        <DropGestureRecognizer AllowDrop="True" Drop="OnDrop" />
+                    </Grid.GestureRecognizers>
+                    <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center">
+                        <Label Text="将文件或文件夹拖到这里" HorizontalTextAlignment="Center" FontSize="16" />
+                        <Label Text="支持 .docx、.pdf、.jpg、.png" HorizontalTextAlignment="Center" FontSize="13" TextColor="#666" />
+                    </VerticalStackLayout>
+                </Grid>
+            </Border>
+
+            <HorizontalStackLayout Spacing="12" VerticalOptions="Center">
+                <Label Text="图像压缩质量" VerticalTextAlignment="Center" />
+                <Picker ItemsSource="{Binding QualityOptions}" SelectedItem="{Binding SelectedQuality}" HorizontalOptions="FillAndExpand" />
+            </HorizontalStackLayout>
+
+            <ProgressBar Progress="{Binding Progress}" HeightRequest="6" />
+            <Label Text="{Binding ProgressMessage}" TextColor="#666" />
+
+            <CollectionView ItemsSource="{Binding Results}" SelectionMode="None">
+                <CollectionView.EmptyView>
+                    <Label Text="尚未处理任何文件。" TextColor="#999" HorizontalTextAlignment="Center" />
+                </CollectionView.EmptyView>
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Frame Margin="0,6" Padding="14" BorderColor="#E0E6F3" CornerRadius="10">
+                            <VerticalStackLayout Spacing="4">
+                                <Label Text="{Binding FileName}" FontAttributes="Bold" />
+                                <Label Text="{Binding StatusText}" FontSize="13" TextColor="#555" />
+                                <Label Text="{Binding SizeDifference}" FontSize="12" TextColor="#777" />
+                            </VerticalStackLayout>
+                        </Frame>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
