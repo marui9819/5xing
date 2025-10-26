@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-maccatalyst</TargetFramework>
+    <Nullable>enable</Nullable>
+    <OutputType>Exe</OutputType>
+    <SingleProject>true</SingleProject>
+    <UseMaui>true</UseMaui>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationTitle>Privacy Metadata Cleaner</ApplicationTitle>
+    <ApplicationId>com.5xing.privacymetadatacleaner</ApplicationId>
+    <ApplicationIdGuid>9a17c6a4-5021-4f4c-977a-90c701d4b6d3</ApplicationIdGuid>
+    <SupportedOSPlatformVersion>14.0</SupportedOSPlatformVersion>
+    <RootNamespace>PrivacyMetadataCleaner</RootNamespace>
+    <UseMauiEssentials>true</UseMauiEssentials>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="GroupDocs.Metadata" Version="24.4.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <MauiImage Include="Resources\\Images\\**" />
+    <MauiImage Update="Resources\\AppIcon\\appicon.svg" ForegroundFile="Resources\\AppIcon\\appiconfg.svg" IsAppIcon="true" />
+    <MauiFont Include="Resources\\Fonts\\**" />
+    <MauiAsset Include="Resources\\Raw\\**" />
+  </ItemGroup>
+
+</Project>

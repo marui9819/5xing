@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Privacy Metadata Cleaner</string>
+    <key>CFBundleDisplayName</key>
+    <string>Privacy Metadata Cleaner</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.5xing.privacymetadatacleaner</string>
+    <key>CFBundleVersion</key>
+    <string>1.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>应用需要访问文档以清理元数据。</string>
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>应用需要访问下载的文件以清理元数据。</string>
+</dict>
+</plist>

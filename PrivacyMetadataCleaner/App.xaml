@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Application xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:resources="clr-namespace:PrivacyMetadataCleaner.Resources"
+             x:Class="PrivacyMetadataCleaner.App">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <resources:Styles />
+            </ResourceDictionary.MergedDictionaries>
+            <Color x:Key="PrimaryColor">#2E3A59</Color>
+            <Style TargetType="Label">
+                <Setter Property="TextColor" Value="#222" />
+                <Setter Property="FontSize" Value="14" />
+            </Style>
+            <Style TargetType="Button">
+                <Setter Property="BackgroundColor" Value="#2E3A59" />
+                <Setter Property="TextColor" Value="White" />
+                <Setter Property="CornerRadius" Value="6" />
+                <Setter Property="Padding" Value="14,8" />
+            </Style>
+            <Style TargetType="Border">
+                <Setter Property="Stroke" Value="#2E3A59" />
+                <Setter Property="StrokeThickness" Value="2" />
+                <Setter Property="BackgroundColor" Value="#F7F9FC" />
+                <Setter Property="StrokeShape">
+                    <Setter.Value>
+                        <RoundRectangle CornerRadius="12" />
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
