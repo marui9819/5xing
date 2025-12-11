@@ -1,0 +1,33 @@
+{
+  "name": "instpro-calculator",
+  "version": "0.1.0",
+  "description": "Desktop calculator for macOS with multi-expression input and history.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "build:mac": "electron-builder --mac dmg"
+  },
+  "build": {
+    "productName": "instPro Calculator",
+    "appId": "com.example.instprocalculator",
+    "files": [
+      "app/**/*",
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.utilities"
+    }
+  },
+  "dependencies": {
+    "electron-store": "^10.0.0",
+    "mathjs": "^12.4.1"
+  },
+  "devDependencies": {
+    "electron": "^30.0.6",
+    "electron-builder": "^24.13.3"
+  }
+}

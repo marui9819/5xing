@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>instPro Calculator</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="toolbar">
+      <div class="brand">
+        <div class="brand-icon">+</div>
+        <div>
+          <div class="brand-name">instPro</div>
+          <div class="brand-sub">快速算账</div>
+        </div>
+      </div>
+      <div class="toolbar-actions">
+        <button id="paste-from-clipboard" class="ghost">粘贴算式</button>
+        <button id="add-expression" class="primary">新增式子</button>
+        <button id="save-session" class="secondary">保存本次计算</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">当前算式</div>
+            <div class="card-subtitle">支持多行计算，自动实时出结果</div>
+          </div>
+        </div>
+        <div id="expression-list" class="expression-list"></div>
+      </section>
+
+      <section class="card history">
+        <div class="card-header">
+          <div>
+            <div class="card-title">历史记录</div>
+            <div class="card-subtitle">点击可恢复到编辑区</div>
+          </div>
+          <button id="clear-history" class="ghost">清空历史</button>
+        </div>
+        <div id="history-empty" class="empty">暂无历史记录</div>
+        <div id="history-list" class="history-list"></div>
+      </section>
+    </main>
+
+    <script src="renderer.js" type="module"></script>
+  </body>
+</html>
