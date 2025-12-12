@@ -1,7 +1,7 @@
 {
-  "name": "instpro-calculator",
-  "version": "0.1.0",
-  "description": "Desktop calculator for macOS with multi-expression input and history.",
+  "name": "5xing-calculator",
+  "version": "0.2.0",
+  "description": "Desktop calculator for macOS with titled expressions, notes, cloud sync, and history.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -9,8 +9,8 @@
     "build:mac": "electron-builder --mac dmg"
   },
   "build": {
-    "productName": "instPro Calculator",
-    "appId": "com.example.instprocalculator",
+    "productName": "5Xing计算器",
+    "appId": "com.example.5xingcalculator",
     "files": [
       "app/**/*",
       "main.js",

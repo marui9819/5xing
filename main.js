@@ -8,7 +8,7 @@ const createWindow = () => {
     minWidth: 960,
     minHeight: 700,
     backgroundColor: '#f2f4f8',
-    title: 'instPro Calculator',
+    title: '5Xing计算器',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

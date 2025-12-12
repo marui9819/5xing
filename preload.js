@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('instProAPI', {
   loadHistory: () => store.get('history', []),
   saveExpressions: (expressions) => store.set('expressions', expressions),
   loadExpressions: () => store.get('expressions', []),
+  saveSettings: (settings) => store.set('cloudSettings', settings),
+  loadSettings: () => store.get('cloudSettings', null),
   readClipboard: () => clipboard.readText(),
   evaluate: (expression) => math.evaluate(expression)
 });

@@ -3,18 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>instPro Calculator</title>
+    <title>5Xing计算器</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <header class="toolbar">
-      <div class="brand">
-        <div class="brand-icon">+</div>
-        <div>
-          <div class="brand-name">instPro</div>
-          <div class="brand-sub">快速算账</div>
+        <div class="brand">
+          <div class="brand-icon">+</div>
+          <div>
+            <div class="brand-name">5Xing计算器</div>
+            <div class="brand-sub">更好用的计算器</div>
+          </div>
         </div>
-      </div>
       <div class="toolbar-actions">
         <button id="paste-from-clipboard" class="ghost">粘贴算式</button>
         <button id="add-expression" class="primary">新增式子</button>
@@ -27,7 +27,7 @@
         <div class="card-header">
           <div>
             <div class="card-title">当前算式</div>
-            <div class="card-subtitle">支持多行计算，自动实时出结果</div>
+            <div class="card-subtitle">支持多条计算式，实时出结果与统计</div>
           </div>
           <div class="card-meta">
             <div class="meta-block">
@@ -43,6 +43,32 @@
         <div id="expression-list" class="expression-list"></div>
       </section>
 
+      <section class="card settings">
+        <div class="card-header">
+          <div>
+            <div class="card-title">云同步</div>
+            <div class="card-subtitle">选择常用云盘，随时备份算式和备注</div>
+          </div>
+        </div>
+        <div class="settings-grid">
+          <label class="settings-field">
+            <span>云服务</span>
+            <select id="cloud-provider">
+              <option value="icloud">iCloud</option>
+              <option value="onedrive">OneDrive</option>
+              <option value="dropbox">Dropbox</option>
+              <option value="local">仅本地</option>
+            </select>
+          </label>
+          <label class="settings-field">
+            <span>自动同步</span>
+            <input type="checkbox" id="auto-sync" />
+          </label>
+          <button id="sync-now" class="secondary">立即同步</button>
+        </div>
+        <div id="cloud-status" class="settings-status">未同步</div>
+      </section>
+
       <section class="card history">
         <div class="card-header">
           <div>
@@ -53,6 +79,16 @@
         </div>
         <div id="history-empty" class="empty">暂无历史记录</div>
         <div id="history-list" class="history-list"></div>
+      </section>
+
+      <section class="card keypad">
+        <div class="card-header">
+          <div>
+            <div class="card-title">输入键盘</div>
+            <div class="card-subtitle">点击即可插入，便于快速录入</div>
+          </div>
+        </div>
+        <div id="keypad-grid" class="keypad-grid"></div>
       </section>
     </main>
 
