@@ -5,22 +5,35 @@ const historyList = document.getElementById('history-list');
 const historyEmpty = document.getElementById('history-empty');
 const clearHistory = document.getElementById('clear-history');
 const pasteButton = document.getElementById('paste-from-clipboard');
+const validCount = document.getElementById('expression-valid-count');
+const expressionTotal = document.getElementById('expression-total');
 
 let expressions = [];
 let history = [];
 
 const sanitizeExpression = (text) => {
   if (!text) return '';
-  return text
-    .replace(/×/g, '*')
-    .replace(/÷/g, '/')
+
+  const toHalfWidth = (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0);
+
+  const normalized = text
+    .replace(/[０-９]/g, toHalfWidth)
+    .replace(/[＋﹢]/g, '+')
+    .replace(/[×xX＊﹡·⋅]/g, '*')
+    .replace(/[÷／⁄]/g, '/')
+    .replace(/[－﹣–—‒−]/g, '-')
+    .replace(/[（﹙【〔｛]/g, '(')
+    .replace(/[）﹚】〕｝]/g, ')')
+    .replace(/．/g, '.')
     .replace(/，/g, ',')
-    .replace(/：/g, ':')
-    .replace(/[；;]/g, ';')
-    .replace(/[−–—]/g, '-')
-    .replace(/＝/g, '=')
     .replace(/[\s\u00a0]+/g, ' ')
     .trim();
+
+  // Remove thousands separators to avoid NaN while keeping function arity commas invalid.
+  const withoutCommas = normalized.replace(/,/g, '');
+
+  // Strip any remaining unsupported characters to keep evaluation safe.
+  return withoutCommas.replace(/[^0-9.+\-*/()\s]/g, '');
 };
 
 const formatResult = (value) => {
@@ -34,7 +47,14 @@ const formatResult = (value) => {
 
 const localEvaluate = (clean) => {
   // Basic, Math-only evaluation fallback when preload bridge is unavailable
-  const safeExpression = clean.replace(/[^-+*/().,\d\s]/g, '');
+  const safeExpression = clean.replace(/[^-+*/().\d\s]/g, '');
+  if (!safeExpression.trim()) throw new Error('缺少有效数字');
+
+  // Disallow repeated operators like "++" which often lead to NaN.
+  if (/[+*/]{2,}|-{3,}/.test(safeExpression)) {
+    throw new Error('表达式不完整');
+  }
+
   // eslint-disable-next-line no-new-func
   const evaluator = new Function(`return (${safeExpression})`);
   return evaluator();
@@ -59,6 +79,25 @@ const persistExpressions = () => {
 
 const persistHistory = () => {
   window.instProAPI?.saveHistory(history);
+};
+
+const updateAggregates = () => {
+  let valid = 0;
+  let sum = 0;
+
+  expressions.forEach((entry) => {
+    const res = entry.result;
+    if (res && !res.error && res.display && res.display !== '无效') {
+      const numeric = Number(res.display);
+      if (!Number.isNaN(numeric)) {
+        valid += 1;
+        sum += numeric;
+      }
+    }
+  });
+
+  validCount.textContent = valid;
+  expressionTotal.textContent = valid ? formatResult(sum) : '0';
 };
 
 const createExpressionRow = (entry) => {
@@ -108,13 +147,32 @@ const createExpressionRow = (entry) => {
     entry.result = evaluation;
 
     persistExpressions();
+    updateAggregates();
   };
 
   input.addEventListener('input', update);
   input.addEventListener('paste', (e) => {
     e.preventDefault();
     const text = e.clipboardData.getData('text/plain');
-    document.execCommand('insertText', false, text);
+    if (!text) return;
+
+    const lines = text
+      .split(/\r?\n/)
+      .map((line) => sanitizeExpression(line))
+      .filter(Boolean);
+
+    if (!lines.length) return;
+
+    document.execCommand('insertText', false, lines.shift());
+
+    lines.forEach((line) => {
+      const entry = { node: null, value: line, result: null };
+      expressions.push(entry);
+      const newNode = createExpressionRow(entry);
+      expressionList.appendChild(newNode);
+    });
+
+    persistExpressions();
   });
 
   row.appendChild(input);
@@ -137,13 +195,22 @@ const renderExpressions = () => {
     const node = createExpressionRow(entry);
     expressionList.appendChild(node);
   });
+
+  updateAggregates();
 };
 
-const handleAddExpression = () => {
-  const entry = { node: null, value: '', result: null };
+const handleAddExpression = (value = '') => {
+  const entry = { node: null, value, result: null };
   expressions.push(entry);
   const node = createExpressionRow(entry);
   expressionList.appendChild(node);
+
+  const input = node.querySelector('.expression-input');
+  if (input) {
+    input.focus();
+  }
+
+  return node;
 };
 
 const renderHistory = () => {
@@ -205,7 +272,7 @@ const renderHistory = () => {
 
 const saveSessionToHistory = () => {
   const cleaned = expressions
-    .map((expr) => expr.node?.querySelector('.expression-input')?.textContent.trim() || '')
+    .map((expr) => sanitizeExpression(expr.node?.querySelector('.expression-input')?.textContent || expr.value || ''))
     .filter((text) => text.length);
 
   if (!cleaned.length) return;
@@ -253,20 +320,36 @@ addBtn.addEventListener('click', handleAddExpression);
 saveBtn.addEventListener('click', saveSessionToHistory);
 clearHistory.addEventListener('click', clearAllHistory);
 
-  pasteButton.addEventListener('click', async () => {
-    const text = await window.instProAPI?.readClipboard?.();
-    if (!text) return;
+pasteButton.addEventListener('click', async () => {
+  const text = await window.instProAPI?.readClipboard?.();
+  if (!text) return;
 
-    const active = document.activeElement;
-    if (active && active.classList.contains('expression-input')) {
-      document.execCommand('insertText', false, text);
-    } else {
-      const entry = { node: null, value: sanitizeExpression(text), result: null };
-      expressions.push(entry);
-      const node = createExpressionRow(entry);
-      expressionList.appendChild(node);
-      persistExpressions();
-    }
-  });
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => sanitizeExpression(line))
+    .filter(Boolean);
+
+  if (!lines.length) return;
+
+  const active = document.activeElement;
+  if (active && active.classList.contains('expression-input')) {
+    document.execCommand('insertText', false, lines.shift());
+  }
+
+  lines.forEach((line) => handleAddExpression(line));
+  persistExpressions();
+});
+
+document.addEventListener('keydown', (event) => {
+  if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+    event.preventDefault();
+    saveSessionToHistory();
+  }
+
+  if (event.shiftKey && event.key === 'Enter') {
+    event.preventDefault();
+    handleAddExpression();
+  }
+});
 
 restoreState();
