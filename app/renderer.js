@@ -24,10 +24,20 @@ const sanitizeExpression = (text) => {
 };
 
 const formatResult = (value) => {
-  if (typeof value !== 'number' || Number.isNaN(value)) return '无效';
-  if (!Number.isFinite(value)) return '∞';
-  const rounded = Math.abs(value) < 1 ? Math.round(value * 1e8) / 1e8 : Math.round(value * 1e6) / 1e6;
+  const numericValue = typeof value === 'string' ? Number(value) : value;
+  if (typeof numericValue !== 'number' || Number.isNaN(numericValue)) return '无效';
+  if (!Number.isFinite(numericValue)) return '∞';
+  const rounded =
+    Math.abs(numericValue) < 1 ? Math.round(numericValue * 1e8) / 1e8 : Math.round(numericValue * 1e6) / 1e6;
   return rounded.toString();
+};
+
+const localEvaluate = (clean) => {
+  // Basic, Math-only evaluation fallback when preload bridge is unavailable
+  const safeExpression = clean.replace(/[^-+*/().,\d\s]/g, '');
+  // eslint-disable-next-line no-new-func
+  const evaluator = new Function(`return (${safeExpression})`);
+  return evaluator();
 };
 
 const evaluateExpression = (text) => {
@@ -35,7 +45,7 @@ const evaluateExpression = (text) => {
   if (!clean) return { display: '', raw: '' };
 
   try {
-    const evaluated = window.instProAPI?.evaluate(clean);
+    const evaluated = window.instProAPI?.evaluate ? window.instProAPI.evaluate(clean) : localEvaluate(clean);
     return { display: formatResult(evaluated), raw: clean };
   } catch (err) {
     return { display: '错误', raw: clean, error: err.message };
@@ -243,17 +253,20 @@ addBtn.addEventListener('click', handleAddExpression);
 saveBtn.addEventListener('click', saveSessionToHistory);
 clearHistory.addEventListener('click', clearAllHistory);
 
-pasteButton.addEventListener('click', async () => {
-  const text = await window.instProAPI?.readClipboard?.();
-  if (!text) return;
+  pasteButton.addEventListener('click', async () => {
+    const text = await window.instProAPI?.readClipboard?.();
+    if (!text) return;
 
-  const active = document.activeElement;
-  if (active && active.classList.contains('expression-input')) {
-    document.execCommand('insertText', false, text);
-  } else {
-    const node = createExpressionRow(text);
-    expressionList.appendChild(node);
-  }
-});
+    const active = document.activeElement;
+    if (active && active.classList.contains('expression-input')) {
+      document.execCommand('insertText', false, text);
+    } else {
+      const entry = { node: null, value: sanitizeExpression(text), result: null };
+      expressions.push(entry);
+      const node = createExpressionRow(entry);
+      expressionList.appendChild(node);
+      persistExpressions();
+    }
+  });
 
 restoreState();
