@@ -16,9 +16,16 @@
           </div>
         </div>
       <div class="toolbar-actions">
-        <button id="paste-from-clipboard" class="ghost">粘贴算式</button>
-        <button id="add-expression" class="primary">新增式子</button>
-        <button id="save-session" class="secondary">保存本次计算</button>
+        <div class="toolbar-actions-left">
+          <button id="selection-toggle" class="ghost">选择删除</button>
+          <button id="toggle-history" class="ghost">历史记录</button>
+          <button id="toggle-cloud" class="ghost">云同步</button>
+        </div>
+        <div class="toolbar-actions-right">
+          <button id="paste-from-clipboard" class="ghost">粘贴算式</button>
+          <button id="add-expression" class="primary">新增式子</button>
+          <button id="save-session" class="secondary">保存本次计算</button>
+        </div>
       </div>
     </header>
 
@@ -43,7 +50,7 @@
         <div id="expression-list" class="expression-list"></div>
       </section>
 
-      <section class="card settings">
+      <section class="card settings collapsible collapsed" data-section="cloud">
         <div class="card-header">
           <div>
             <div class="card-title">云同步</div>
@@ -69,7 +76,7 @@
         <div id="cloud-status" class="settings-status">未同步</div>
       </section>
 
-      <section class="card history">
+      <section class="card history collapsible collapsed" data-section="history">
         <div class="card-header">
           <div>
             <div class="card-title">历史记录</div>

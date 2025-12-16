@@ -1,6 +1,9 @@
 const expressionList = document.getElementById('expression-list');
 const addBtn = document.getElementById('add-expression');
 const saveBtn = document.getElementById('save-session');
+const selectionToggle = document.getElementById('selection-toggle');
+const toggleCloudBtn = document.getElementById('toggle-cloud');
+const toggleHistoryBtn = document.getElementById('toggle-history');
 const historyList = document.getElementById('history-list');
 const historyEmpty = document.getElementById('history-empty');
 const clearHistory = document.getElementById('clear-history');
@@ -12,11 +15,14 @@ const cloudProvider = document.getElementById('cloud-provider');
 const autoSync = document.getElementById('auto-sync');
 const syncNowBtn = document.getElementById('sync-now');
 const cloudStatus = document.getElementById('cloud-status');
+const cloudSection = document.querySelector('[data-section="cloud"]');
+const historySection = document.querySelector('[data-section="history"]');
 
 let expressions = [];
 let history = [];
 let settings = { provider: 'icloud', autoSync: false, lastSync: '' };
 let activeExpressionInput = null;
+let selectionMode = false;
 
 const normalizeSingleLine = (text) => (text || '').replace(/\r?\n+/g, ' ').trim();
 
@@ -50,6 +56,11 @@ const formatResult = (value) => {
   const rounded =
     Math.abs(numericValue) < 1 ? Math.round(numericValue * 1e8) / 1e8 : Math.round(numericValue * 1e6) / 1e6;
   return rounded.toString();
+};
+
+const truncateText = (text, limit = 20) => {
+  if (!text) return '';
+  return text.length > limit ? `${text.slice(0, limit)}…` : text;
 };
 
 const localEvaluate = (clean) => {
@@ -107,6 +118,29 @@ const updateAggregates = () => {
   expressionTotal.textContent = valid ? formatResult(sum) : '0';
 };
 
+const refreshSelectionLabel = () => {
+  if (!selectionMode) return;
+  const selectedCount = expressions.filter((item) => item.checkbox?.checked).length;
+  if (selectedCount > 0) {
+    selectionToggle.textContent = `删除已选（${selectedCount}）`;
+    selectionToggle.classList.add('danger');
+  } else {
+    selectionToggle.textContent = '取消选择';
+    selectionToggle.classList.remove('danger');
+  }
+};
+
+const setSelectionMode = (enabled) => {
+  selectionMode = enabled;
+  expressions.forEach((entry) => {
+    if (entry.checkbox) entry.checkbox.checked = false;
+    if (entry.node) entry.node.classList.toggle('selectable', enabled);
+  });
+  selectionToggle.textContent = enabled ? '取消选择' : '选择删除';
+  selectionToggle.classList.remove('danger');
+  refreshSelectionLabel();
+};
+
 const setActiveInput = (input) => {
   activeExpressionInput = input;
 };
@@ -135,30 +169,131 @@ const createExpressionRow = (entry, index) => {
   const row = document.createElement('div');
   row.className = 'expression-row';
 
+  const selectBox = document.createElement('div');
+  selectBox.className = 'expression-select';
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.addEventListener('change', () => refreshSelectionLabel());
+  selectBox.appendChild(checkbox);
+
   const left = document.createElement('div');
   left.className = 'expression-left';
 
   const meta = document.createElement('div');
   meta.className = 'expression-meta';
 
+  const titleRow = document.createElement('div');
+  titleRow.className = 'expression-title-row';
+
+  const titleDisplay = document.createElement('div');
+  titleDisplay.className = 'expression-title-display';
+  titleDisplay.textContent = entry.title || `算式${index + 1}`;
+  titleDisplay.title = '双击可重命名';
+
   const titleInput = document.createElement('input');
-  titleInput.className = 'expression-title';
+  titleInput.className = 'expression-title-input hidden';
   titleInput.value = entry.title || `算式${index + 1}`;
-  titleInput.addEventListener('input', () => {
-    entry.title = titleInput.value.trim() || `算式${index + 1}`;
-    persistExpressions();
+
+  const finishTitleEdit = (cancel = false) => {
+    if (!cancel) {
+      entry.title = titleInput.value.trim() || `算式${index + 1}`;
+      titleDisplay.textContent = entry.title;
+      persistExpressions();
+    }
+    titleInput.classList.add('hidden');
+    titleDisplay.classList.remove('hidden');
+  };
+
+  titleInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      finishTitleEdit();
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      finishTitleEdit(true);
+    }
   });
+  titleInput.addEventListener('blur', () => finishTitleEdit());
+
+  titleDisplay.addEventListener('dblclick', () => {
+    titleInput.value = entry.title || `算式${index + 1}`;
+    titleDisplay.classList.add('hidden');
+    titleInput.classList.remove('hidden');
+    titleInput.focus();
+    titleInput.select();
+  });
+
+  const noteTrigger = document.createElement('button');
+  noteTrigger.className = 'note-trigger';
+  noteTrigger.textContent = '+';
+  noteTrigger.title = '添加备注';
+
+  const notePreview = document.createElement('div');
+  notePreview.className = 'note-preview';
 
   const noteInput = document.createElement('input');
-  noteInput.className = 'expression-note';
-  noteInput.placeholder = '备注（可选）';
+  noteInput.className = 'expression-note-input hidden';
+  noteInput.placeholder = '输入备注后回车保存';
   noteInput.value = entry.note || '';
-  noteInput.addEventListener('input', () => {
-    entry.note = noteInput.value;
+
+  const updateNotePreview = () => {
+    if (entry.note) {
+      notePreview.textContent = truncateText(entry.note, 20);
+      notePreview.title = entry.note;
+      notePreview.classList.remove('empty');
+    } else {
+      notePreview.textContent = '无备注';
+      notePreview.title = '';
+      notePreview.classList.add('empty');
+    }
+  };
+
+  const finishNoteEdit = () => {
+    entry.note = normalizeSingleLine(noteInput.value);
+    noteInput.classList.add('hidden');
+    updateNotePreview();
     persistExpressions();
+  };
+
+  noteInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      finishNoteEdit();
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      noteInput.value = entry.note || '';
+      finishNoteEdit();
+    }
+  });
+  noteInput.addEventListener('blur', finishNoteEdit);
+
+  noteTrigger.addEventListener('click', () => {
+    noteInput.value = entry.note || '';
+    noteInput.classList.remove('hidden');
+    noteInput.focus();
+    noteInput.select();
   });
 
-  meta.appendChild(titleInput);
+  notePreview.addEventListener('click', () => {
+    if (!entry.note) {
+      noteInput.value = entry.note || '';
+      noteInput.classList.remove('hidden');
+      noteInput.focus();
+      return;
+    }
+    alert(entry.note);
+  });
+
+  updateNotePreview();
+
+  titleRow.appendChild(titleDisplay);
+  titleRow.appendChild(titleInput);
+  titleRow.appendChild(noteTrigger);
+
+  meta.appendChild(titleRow);
+  meta.appendChild(notePreview);
   meta.appendChild(noteInput);
 
   const input = document.createElement('div');
@@ -257,9 +392,11 @@ const createExpressionRow = (entry, index) => {
   left.appendChild(meta);
   left.appendChild(input);
 
+  row.appendChild(selectBox);
   row.appendChild(left);
   row.appendChild(resultBox);
 
+  entry.checkbox = checkbox;
   entry.node = row;
   setTimeout(update, 20);
 
@@ -279,6 +416,7 @@ const renderExpressions = () => {
     expressionList.appendChild(node);
   });
 
+  setSelectionMode(selectionMode);
   updateAggregates();
 };
 
@@ -287,6 +425,11 @@ const handleAddExpression = (value = '') => {
   expressions.push(entry);
   const node = createExpressionRow(entry, expressions.length - 1);
   expressionList.appendChild(node);
+
+  if (selectionMode) {
+    node.classList.add('selectable');
+    refreshSelectionLabel();
+  }
 
   const input = node.querySelector('.expression-input');
   if (input) {
@@ -433,25 +576,52 @@ const restoreState = () => {
   applySettingsUI();
 };
 
+const formatSyncLabel = (stamp) => {
+  if (!stamp) return '未同步';
+  const parsed = new Date(stamp);
+  if (Number.isNaN(parsed)) return `上次同步：${stamp}`;
+  const date = `${parsed.getFullYear()}-${(parsed.getMonth() + 1).toString().padStart(2, '0')}-${parsed
+    .getDate()
+    .toString()
+    .padStart(2, '0')}`;
+  const time = `${parsed.getHours().toString().padStart(2, '0')}:${parsed.getMinutes().toString().padStart(2, '0')}`;
+  return `上次同步：${date} ${time}`;
+};
+
 const applySettingsUI = () => {
   cloudProvider.value = settings.provider;
   autoSync.checked = settings.autoSync;
-  cloudStatus.textContent = settings.lastSync ? `上次同步：${settings.lastSync}` : '未同步';
+  cloudStatus.textContent = formatSyncLabel(settings.lastSync);
 };
 
-const performSync = (manual = false) => {
-  const now = new Date();
-  const stamp = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now
-    .getDate()
-    .toString()
-    .padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-  cloudStatus.textContent = `${manual ? '正在手动同步' : '自动同步'}到 ${cloudProvider.options[cloudProvider.selectedIndex].text}...`;
+const performSync = async (manual = false) => {
+  const providerName = cloudProvider.options[cloudProvider.selectedIndex].text;
+  cloudStatus.textContent = `${manual ? '正在手动同步' : '自动同步'}到 ${providerName}...`;
+  syncNowBtn.disabled = true;
 
-  setTimeout(() => {
-    settings.lastSync = stamp;
-    cloudStatus.textContent = `${cloudProvider.options[cloudProvider.selectedIndex].text} 同步完成（${stamp}）`;
+  const payload = {
+    expressions: expressions.map((expr, idx) => ({
+      title: expr.title || `算式${idx + 1}`,
+      note: expr.note || '',
+      value: expr.value || ''
+    })),
+    history,
+    settings,
+    syncedAt: new Date().toISOString()
+  };
+
+  try {
+    const result = await window.instProAPI?.syncToCloud?.({ provider: settings.provider, data: payload });
+    if (!result?.success) throw new Error(result?.message || '未完成同步');
+
+    settings.lastSync = result.timestamp || payload.syncedAt;
+    cloudStatus.textContent = `${providerName} 同步完成（${formatSyncLabel(settings.lastSync).replace('上次同步：', '')}）`;
     persistSettings();
-  }, 300);
+  } catch (error) {
+    cloudStatus.textContent = `同步失败：${error.message}`;
+  } finally {
+    syncNowBtn.disabled = false;
+  }
 };
 
 const ensureActiveExpression = () => {
@@ -465,28 +635,7 @@ const ensureActiveExpression = () => {
 };
 
 const setupKeypad = () => {
-  const keys = [
-    '7',
-    '8',
-    '9',
-    '÷',
-    '←',
-    '4',
-    '5',
-    '6',
-    '×',
-    '清空',
-    '1',
-    '2',
-    '3',
-    '-',
-    '(',
-    '0',
-    '.',
-    '+',
-    ')',
-    '/'
-  ];
+  const keys = ['清空', '(', ')', '←', '7', '8', '9', '÷', '4', '5', '6', '×', '1', '2', '3', '-', '0', '.', '/', '+'];
 
   keys.forEach((label) => {
     const btn = document.createElement('button');
@@ -517,9 +666,34 @@ const setupKeypad = () => {
   });
 };
 
+const toggleSection = (section, button, label) => {
+  if (!section || !button) return;
+  const collapsed = section.classList.toggle('collapsed');
+  button.classList.toggle('active', !collapsed);
+  button.textContent = collapsed ? label : `收起${label}`;
+};
+
 addBtn.addEventListener('click', () => handleAddExpression());
 saveBtn.addEventListener('click', saveSessionToHistory);
 clearHistory.addEventListener('click', clearAllHistory);
+selectionToggle.addEventListener('click', () => {
+  if (!selectionMode) {
+    setSelectionMode(true);
+    refreshSelectionLabel();
+    return;
+  }
+
+  const selected = expressions.filter((entry) => entry.checkbox?.checked);
+  if (!selected.length) {
+    setSelectionMode(false);
+    return;
+  }
+
+  expressions = expressions.filter((entry) => !selected.includes(entry));
+  renderExpressions();
+  persistExpressions();
+  setSelectionMode(false);
+});
 
 pasteButton.addEventListener('click', async () => {
   const text = await window.instProAPI?.readClipboard?.();
@@ -541,6 +715,9 @@ pasteButton.addEventListener('click', async () => {
   lines.forEach((line) => handleAddExpression(line));
   persistExpressions();
 });
+
+toggleCloudBtn.addEventListener('click', () => toggleSection(cloudSection, toggleCloudBtn, '云同步'));
+toggleHistoryBtn.addEventListener('click', () => toggleSection(historySection, toggleHistoryBtn, '历史记录'));
 
 cloudProvider.addEventListener('change', () => {
   settings.provider = cloudProvider.value;

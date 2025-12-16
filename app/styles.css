@@ -14,6 +14,10 @@
   box-sizing: border-box;
 }
 
+.hidden {
+  display: none !important;
+}
+
 body {
   margin: 0;
   font-family: "Inter", "SF Pro Display", system-ui, -apple-system, "Microsoft YaHei", sans-serif;
@@ -66,6 +70,16 @@ header.toolbar {
 .toolbar-actions {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-left: auto;
+}
+
+.toolbar-actions-left,
+.toolbar-actions-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 button {
@@ -91,6 +105,12 @@ button.secondary {
   background: var(--accent);
   color: #fff;
   box-shadow: 0 6px 14px rgba(249, 115, 22, 0.25);
+}
+
+button.danger {
+  background: var(--danger);
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(239, 68, 68, 0.25);
 }
 
 button.ghost {
@@ -128,6 +148,10 @@ main {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
+}
+
+.collapsible.collapsed {
+  display: none;
 }
 
 .card-meta {
@@ -175,7 +199,7 @@ main {
 
 .expression-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: auto 1fr auto;
   gap: 8px;
   align-items: center;
   padding: 12px;
@@ -185,6 +209,23 @@ main {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
+.expression-select {
+  visibility: hidden;
+  display: flex;
+  align-items: flex-start;
+  padding-top: 4px;
+  min-width: 26px;
+}
+
+.expression-select input {
+  width: 16px;
+  height: 16px;
+}
+
+.expression-row.selectable .expression-select {
+  visibility: visible;
+}
+
 .expression-left {
   display: flex;
   flex-direction: column;
@@ -192,26 +233,69 @@ main {
 }
 
 .expression-meta {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
 }
 
-.expression-title,
-.expression-note {
+.expression-title-input,
+.expression-note-input {
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 10px;
+  padding: 8px 10px;
   font-size: 14px;
   background: #fff;
   outline: none;
+  min-width: 220px;
 }
 
-.expression-title:focus,
-.expression-note:focus,
+.expression-title-input:focus,
+.expression-note-input:focus,
 .expression-input:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(44, 134, 255, 0.15);
+}
+
+.expression-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.expression-title-display {
+  font-weight: 700;
+  font-size: 16px;
+  padding: 6px 10px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  min-width: 120px;
+  user-select: none;
+}
+
+.note-trigger {
+  border: 1px solid var(--border);
+  background: #eef2f7;
+  padding: 6px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.note-preview {
+  font-size: 13px;
+  color: var(--text);
+  padding: 0 2px;
+  cursor: pointer;
+  max-width: 360px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.note-preview.empty {
+  color: var(--muted);
 }
 
 .expression-input {
@@ -358,7 +442,7 @@ main {
 
 .keypad-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  grid-template-columns: repeat(4, minmax(80px, 1fr));
   gap: 10px;
 }
 
