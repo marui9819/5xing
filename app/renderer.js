@@ -15,14 +15,21 @@ const cloudProvider = document.getElementById('cloud-provider');
 const autoSync = document.getElementById('auto-sync');
 const syncNowBtn = document.getElementById('sync-now');
 const cloudStatus = document.getElementById('cloud-status');
+const cloudFolder = document.getElementById('cloud-folder');
 const cloudSection = document.querySelector('[data-section="cloud"]');
 const historySection = document.querySelector('[data-section="history"]');
 
 let expressions = [];
 let history = [];
-let settings = { provider: 'icloud', autoSync: false, lastSync: '' };
+let settings = { provider: 'icloud', autoSync: false, lastSync: '', folder: '' };
 let activeExpressionInput = null;
 let selectionMode = false;
+
+const setButtonLabel = (button, text) => {
+  if (!button) return;
+  const icon = button.dataset.icon || '';
+  button.innerHTML = icon ? `<span class="icon">${icon}</span><span class="label">${text}</span>` : text;
+};
 
 const normalizeSingleLine = (text) => (text || '').replace(/\r?\n+/g, ' ').trim();
 
@@ -119,13 +126,17 @@ const updateAggregates = () => {
 };
 
 const refreshSelectionLabel = () => {
-  if (!selectionMode) return;
+  if (!selectionMode) {
+    setButtonLabel(selectionToggle, '选择');
+    selectionToggle.classList.remove('danger');
+    return;
+  }
   const selectedCount = expressions.filter((item) => item.checkbox?.checked).length;
   if (selectedCount > 0) {
-    selectionToggle.textContent = `删除已选（${selectedCount}）`;
+    setButtonLabel(selectionToggle, `删除（${selectedCount}）`);
     selectionToggle.classList.add('danger');
   } else {
-    selectionToggle.textContent = '取消选择';
+    setButtonLabel(selectionToggle, '取消');
     selectionToggle.classList.remove('danger');
   }
 };
@@ -136,7 +147,7 @@ const setSelectionMode = (enabled) => {
     if (entry.checkbox) entry.checkbox.checked = false;
     if (entry.node) entry.node.classList.toggle('selectable', enabled);
   });
-  selectionToggle.textContent = enabled ? '取消选择' : '选择删除';
+  setButtonLabel(selectionToggle, enabled ? '取消' : '选择');
   selectionToggle.classList.remove('danger');
   refreshSelectionLabel();
 };
@@ -252,6 +263,7 @@ const createExpressionRow = (entry, index) => {
   const finishNoteEdit = () => {
     entry.note = normalizeSingleLine(noteInput.value);
     noteInput.classList.add('hidden');
+    notePreview.classList.remove('hidden');
     updateNotePreview();
     persistExpressions();
   };
@@ -272,6 +284,7 @@ const createExpressionRow = (entry, index) => {
   noteTrigger.addEventListener('click', () => {
     noteInput.value = entry.note || '';
     noteInput.classList.remove('hidden');
+    notePreview.classList.add('hidden');
     noteInput.focus();
     noteInput.select();
   });
@@ -280,6 +293,7 @@ const createExpressionRow = (entry, index) => {
     if (!entry.note) {
       noteInput.value = entry.note || '';
       noteInput.classList.remove('hidden');
+      notePreview.classList.add('hidden');
       noteInput.focus();
       return;
     }
@@ -291,10 +305,10 @@ const createExpressionRow = (entry, index) => {
   titleRow.appendChild(titleDisplay);
   titleRow.appendChild(titleInput);
   titleRow.appendChild(noteTrigger);
+  titleRow.appendChild(notePreview);
+  titleRow.appendChild(noteInput);
 
   meta.appendChild(titleRow);
-  meta.appendChild(notePreview);
-  meta.appendChild(noteInput);
 
   const input = document.createElement('div');
   input.className = 'expression-input';
@@ -568,7 +582,8 @@ const restoreState = () => {
   settings = {
     provider: storedSettings?.provider || 'icloud',
     autoSync: Boolean(storedSettings?.autoSync),
-    lastSync: storedSettings?.lastSync || ''
+    lastSync: storedSettings?.lastSync || '',
+    folder: storedSettings?.folder || ''
   };
 
   renderExpressions();
@@ -591,7 +606,29 @@ const formatSyncLabel = (stamp) => {
 const applySettingsUI = () => {
   cloudProvider.value = settings.provider;
   autoSync.checked = settings.autoSync;
-  cloudStatus.textContent = formatSyncLabel(settings.lastSync);
+  cloudFolder.value = settings.folder || '';
+};
+
+const describeTarget = (pathText) => (pathText ? `目标：${pathText}` : '未找到云盘目录');
+
+const checkCloudAvailability = async () => {
+  const availability = await window.instProAPI?.checkCloudAvailability?.({
+    provider: settings.provider,
+    customPath: settings.folder
+  });
+
+  if (!availability) {
+    cloudStatus.textContent = `${formatSyncLabel(settings.lastSync)} | 无法检测云盘`;
+    return null;
+  }
+
+  if (!availability.available) {
+    cloudStatus.textContent = `云盘未就绪：${availability.message || '请确认登录对应云服务'}`;
+    return null;
+  }
+
+  cloudStatus.textContent = `${formatSyncLabel(settings.lastSync)} | ${describeTarget(availability.path)}`;
+  return availability.path;
 };
 
 const performSync = async (manual = false) => {
@@ -611,7 +648,15 @@ const performSync = async (manual = false) => {
   };
 
   try {
-    const result = await window.instProAPI?.syncToCloud?.({ provider: settings.provider, data: payload });
+    const targetPath = await checkCloudAvailability();
+    if (!targetPath) throw new Error('无法访问云盘目录');
+
+    const result = await window.instProAPI?.syncToCloud?.({
+      provider: settings.provider,
+      customPath: settings.folder,
+      data: payload,
+      targetPath
+    });
     if (!result?.success) throw new Error(result?.message || '未完成同步');
 
     settings.lastSync = result.timestamp || payload.syncedAt;
@@ -670,7 +715,7 @@ const toggleSection = (section, button, label) => {
   if (!section || !button) return;
   const collapsed = section.classList.toggle('collapsed');
   button.classList.toggle('active', !collapsed);
-  button.textContent = collapsed ? label : `收起${label}`;
+  setButtonLabel(button, collapsed ? `${label}↓` : `${label}↑`);
 };
 
 addBtn.addEventListener('click', () => handleAddExpression());
@@ -722,12 +767,20 @@ toggleHistoryBtn.addEventListener('click', () => toggleSection(historySection, t
 cloudProvider.addEventListener('change', () => {
   settings.provider = cloudProvider.value;
   persistSettings();
+  checkCloudAvailability();
   if (settings.autoSync) performSync();
 });
 
 autoSync.addEventListener('change', () => {
   settings.autoSync = autoSync.checked;
   persistSettings();
+  if (settings.autoSync) performSync();
+});
+
+cloudFolder.addEventListener('change', () => {
+  settings.folder = normalizeSingleLine(cloudFolder.value);
+  persistSettings();
+  checkCloudAvailability();
   if (settings.autoSync) performSync();
 });
 
@@ -748,6 +801,13 @@ document.addEventListener('keydown', (event) => {
 const start = () => {
   restoreState();
   setupKeypad();
+  checkCloudAvailability();
+  setButtonLabel(selectionToggle, '选择');
+  setButtonLabel(toggleHistoryBtn, '历史↓');
+  setButtonLabel(toggleCloudBtn, '云同步↓');
+  setButtonLabel(pasteButton, '粘贴');
+  setButtonLabel(addBtn, '新增');
+  setButtonLabel(saveBtn, '保存');
   if (settings.autoSync) performSync();
 };
 

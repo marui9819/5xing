@@ -101,6 +101,17 @@ button.primary:hover {
   transform: translateY(-1px);
 }
 
+.button-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.button-with-icon .icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
 button.secondary {
   background: var(--accent);
   color: #fff;
@@ -201,7 +212,7 @@ main {
   display: grid;
   grid-template-columns: auto 1fr auto;
   gap: 8px;
-  align-items: center;
+  align-items: flex-start;
   padding: 12px;
   background: #f7f9fd;
   border: 1px solid var(--border);
@@ -227,16 +238,17 @@ main {
 }
 
 .expression-left {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+  align-items: stretch;
 }
 
 .expression-meta {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-items: flex-start;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .expression-title-input,
@@ -261,18 +273,24 @@ main {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .expression-title-display {
   font-weight: 700;
   font-size: 16px;
-  padding: 6px 10px;
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  padding: 4px 2px;
+  background: transparent;
+  border: 1px dashed transparent;
+  border-radius: 8px;
   cursor: pointer;
   min-width: 120px;
   user-select: none;
+}
+
+.expression-title-display:hover {
+  border-color: var(--border);
+  background: #fff;
 }
 
 .note-trigger {
@@ -281,17 +299,21 @@ main {
   padding: 6px 10px;
   border-radius: 10px;
   cursor: pointer;
+  line-height: 1;
 }
 
 .note-preview {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text);
-  padding: 0 2px;
+  padding: 4px 8px;
   cursor: pointer;
-  max-width: 360px;
+  max-width: 320px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  background: #fff;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
 }
 
 .note-preview.empty {
@@ -299,14 +321,16 @@ main {
 }
 
 .expression-input {
-  min-height: 44px;
-  border: none;
-  background: transparent;
+  min-height: 60px;
+  border: 1px solid var(--border);
+  background: #fff;
   font-size: 16px;
   outline: none;
   color: var(--text);
-  padding: 4px 8px;
+  padding: 12px 12px;
   white-space: normal;
+  border-radius: 12px;
+  box-shadow: 0 6px 12px rgba(17, 24, 39, 0.06);
 }
 
 .expression-input:empty:before {
@@ -326,6 +350,10 @@ main {
   border-radius: 12px;
   border: 1px solid var(--border);
   box-shadow: 0 6px 12px rgba(17, 24, 39, 0.06);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-self: stretch;
 }
 
 .result-value {

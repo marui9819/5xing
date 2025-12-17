@@ -39,7 +39,10 @@ const findDropbox = () => {
   return null;
 };
 
-const resolveProviderRoot = (provider) => {
+const resolveProviderRoot = (provider, customPath) => {
+  const custom = customPath ? path.resolve(customPath) : '';
+  if (custom) return custom;
+
   const home = os.homedir();
   if (provider === 'icloud') {
     const icloudDocs = path.join(home, 'Library', 'Mobile Documents', 'com~apple~CloudDocs');
@@ -60,8 +63,21 @@ const resolveProviderRoot = (provider) => {
   return path.join(home, '.5xing-calculator', 'backups');
 };
 
-const syncToCloud = async ({ provider, data }) => {
-  const root = resolveProviderRoot(provider || 'local');
+const checkCloudAvailability = async ({ provider, customPath }) => {
+  const root = resolveProviderRoot(provider || 'local', customPath);
+  if (!root) return { available: false, message: '未检测到可用的云盘目录，请先安装并登录对应云服务。' };
+
+  try {
+    await ensureDir(root);
+    await fs.promises.access(root, fs.constants.W_OK);
+    return { available: true, path: root };
+  } catch (error) {
+    return { available: false, message: error.message };
+  }
+};
+
+const syncToCloud = async ({ provider, customPath, data, targetPath }) => {
+  const root = targetPath || resolveProviderRoot(provider || 'local', customPath);
   if (!root) return { success: false, message: '未检测到可用的云盘目录，请先安装并登录对应云服务。' };
 
   try {
@@ -83,5 +99,6 @@ contextBridge.exposeInMainWorld('instProAPI', {
   loadSettings: () => store.get('cloudSettings', null),
   readClipboard: () => clipboard.readText(),
   evaluate: (expression) => math.evaluate(expression),
-  syncToCloud
+  syncToCloud,
+  checkCloudAvailability
 });

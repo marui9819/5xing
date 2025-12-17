@@ -17,14 +17,26 @@
         </div>
       <div class="toolbar-actions">
         <div class="toolbar-actions-left">
-          <button id="selection-toggle" class="ghost">选择删除</button>
-          <button id="toggle-history" class="ghost">历史记录</button>
-          <button id="toggle-cloud" class="ghost">云同步</button>
+          <button id="selection-toggle" class="ghost button-with-icon" data-icon="☑️">
+            <span class="icon">☑️</span><span class="label">选择</span>
+          </button>
+          <button id="toggle-history" class="ghost button-with-icon" data-icon="🕘">
+            <span class="icon">🕘</span><span class="label">历史↓</span>
+          </button>
+          <button id="toggle-cloud" class="ghost button-with-icon" data-icon="☁️">
+            <span class="icon">☁️</span><span class="label">云同步↓</span>
+          </button>
         </div>
         <div class="toolbar-actions-right">
-          <button id="paste-from-clipboard" class="ghost">粘贴算式</button>
-          <button id="add-expression" class="primary">新增式子</button>
-          <button id="save-session" class="secondary">保存本次计算</button>
+          <button id="paste-from-clipboard" class="ghost button-with-icon" data-icon="📋">
+            <span class="icon">📋</span><span class="label">粘贴</span>
+          </button>
+          <button id="add-expression" class="primary button-with-icon" data-icon="＋">
+            <span class="icon">＋</span><span class="label">新增</span>
+          </button>
+          <button id="save-session" class="secondary button-with-icon" data-icon="💾">
+            <span class="icon">💾</span><span class="label">保存</span>
+          </button>
         </div>
       </div>
     </header>
@@ -70,6 +82,10 @@
           <label class="settings-field">
             <span>自动同步</span>
             <input type="checkbox" id="auto-sync" />
+          </label>
+          <label class="settings-field">
+            <span>同步目录</span>
+            <input type="text" id="cloud-folder" placeholder="留空使用默认云盘目录" />
           </label>
           <button id="sync-now" class="secondary">立即同步</button>
         </div>
