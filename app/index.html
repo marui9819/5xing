@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>5Xing计算器</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="toolbar">
+        <div class="brand">
+          <div class="brand-icon">+</div>
+          <div>
+            <div class="brand-name">5Xing计算器</div>
+            <div class="brand-sub">更好用的计算器</div>
+          </div>
+        </div>
+      <div class="toolbar-actions">
+        <div class="toolbar-actions-left">
+          <button id="selection-toggle" class="ghost button-with-icon" data-icon="☑️">
+            <span class="icon">☑️</span><span class="label">选择</span>
+          </button>
+          <button id="toggle-history" class="ghost button-with-icon" data-icon="🕘">
+            <span class="icon">🕘</span><span class="label">历史↓</span>
+          </button>
+          <button id="toggle-cloud" class="ghost button-with-icon" data-icon="☁️">
+            <span class="icon">☁️</span><span class="label">云同步↓</span>
+          </button>
+        </div>
+        <div class="toolbar-actions-right">
+          <button id="paste-from-clipboard" class="ghost button-with-icon" data-icon="📋">
+            <span class="icon">📋</span><span class="label">粘贴</span>
+          </button>
+          <button id="add-expression" class="primary button-with-icon" data-icon="＋">
+            <span class="icon">＋</span><span class="label">新增</span>
+          </button>
+          <button id="save-session" class="secondary button-with-icon" data-icon="💾">
+            <span class="icon">💾</span><span class="label">保存</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">当前算式</div>
+            <div class="card-subtitle">支持多条计算式，实时出结果与统计</div>
+          </div>
+          <div class="card-meta">
+            <div class="meta-block">
+              <div class="meta-label">有效行</div>
+              <div id="expression-valid-count" class="meta-value">0</div>
+            </div>
+            <div class="meta-block">
+              <div class="meta-label">合计</div>
+              <div id="expression-total" class="meta-value">0</div>
+            </div>
+          </div>
+        </div>
+        <div id="expression-list" class="expression-list"></div>
+      </section>
+
+      <section class="card settings collapsible collapsed" data-section="cloud">
+        <div class="card-header">
+          <div>
+            <div class="card-title">云同步</div>
+            <div class="card-subtitle">选择常用云盘，随时备份算式和备注</div>
+          </div>
+        </div>
+        <div class="settings-grid">
+          <label class="settings-field">
+            <span>云服务</span>
+            <select id="cloud-provider">
+              <option value="icloud">iCloud</option>
+              <option value="onedrive">OneDrive</option>
+              <option value="dropbox">Dropbox</option>
+              <option value="local">仅本地</option>
+            </select>
+          </label>
+          <label class="settings-field">
+            <span>自动同步</span>
+            <input type="checkbox" id="auto-sync" />
+          </label>
+          <label class="settings-field">
+            <span>同步目录</span>
+            <input type="text" id="cloud-folder" placeholder="留空使用默认云盘目录" />
+          </label>
+          <button id="sync-now" class="secondary">立即同步</button>
+        </div>
+        <div id="cloud-status" class="settings-status">未同步</div>
+      </section>
+
+      <section class="card history collapsible collapsed" data-section="history">
+        <div class="card-header">
+          <div>
+            <div class="card-title">历史记录</div>
+            <div class="card-subtitle">点击可恢复到编辑区</div>
+          </div>
+          <button id="clear-history" class="ghost">清空历史</button>
+        </div>
+        <div id="history-empty" class="empty">暂无历史记录</div>
+        <div id="history-list" class="history-list"></div>
+      </section>
+
+      <section class="card keypad">
+        <div class="card-header">
+          <div>
+            <div class="card-title">输入键盘</div>
+            <div class="card-subtitle">点击即可插入，便于快速录入</div>
+          </div>
+        </div>
+        <div id="keypad-grid" class="keypad-grid"></div>
+      </section>
+    </main>
+
+    <script src="renderer.js" type="module"></script>
+  </body>
+</html>
